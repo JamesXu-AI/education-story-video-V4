@@ -1,0 +1,4 @@
+interface:
+  display_name: "Seedance Video Review"
+  short_description: "理解剪辑语义的画面、声音与连续性检查"
+  default_prompt: "Use $seedance-video-review to inspect the actual picture and sound. Read and classify the authored cut or transition before judging continuity; allow motivated changes of angle, shot size, composition, focus, palette, place, or time, and fail only semantic contradictions or real transition artifacts. Return NO_ISSUES or concise actionable issues to the owning module, then recheck only corrected work."

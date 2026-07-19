@@ -1,0 +1,18 @@
+{
+  "contract": "generated-segment-production-record",
+  "segment_id": "segment-001",
+  "provider_task_id": "replace-with-provider-task-id",
+  "provider_attempt_id": "segment-001__attempt-0001",
+  "seed_master_script_sha256": "replace-with-current-sha256",
+  "seedance_execution_plan_sha256": "replace-with-current-sha256",
+  "asset_compatibility_review_sha256": "replace-with-current-sha256",
+  "operation": "multimodal_reference",
+  "submission_revision": 1,
+  "segment_script_path": "segment-script.md",
+  "request_path": "seedance-request.json",
+  "video_path": "video.mp4",
+  "last_frame_path": "last-frame.png",
+  "artifacts_path": "artifacts.json",
+  "generate_audio": true,
+  "status": "GENERATED"
+}

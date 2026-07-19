@@ -1,0 +1,4 @@
+interface:
+  display_name: "Direct Production Design"
+  short_description: "Build exact-state assets and repair real-media mismatches"
+  default_prompt: "Use $direct-production-design to build the current visual asset system, including exact appearance and injury states, and consume any virtual-production real-asset incompatibility request by repairing the semantic plan or forcibly regenerating the affected media instead of relabeling a wrong image."

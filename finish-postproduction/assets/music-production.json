@@ -1,0 +1,72 @@
+{
+  "contract": "finish-music-production/v2",
+  "music_provider": "seedaudio",
+  "seedance_background_music": "forbidden_and_absent",
+  "theme": {
+    "dramatic_thesis_en": "State the story's emotional question as one memorable motif, transform it with the protagonist's changing understanding, and resolve it only at the film ending.",
+    "motif_en": "A compact four-note motif with a recognizable contour; retain its identity through every orchestration and harmonic transformation.",
+    "instrumentation_en": "Warm felt piano, soft plucked strings, restrained woodwinds, rounded low strings, and delicate non-diegetic percussion appropriate to the production design.",
+    "production_character_en": "Intimate, cinematic, warm, uncluttered, dynamic, and emotionally breathtaking; make the earned payoff deeply moving and unforgettable while preserving generous space for dialogue, ambience, and teaching beats.",
+    "forbidden_en": [
+      "vocals or spoken words",
+      "trailer impacts and oversized risers",
+      "constant wall-to-wall intensity",
+      "a new unrelated melody at each Segment cut",
+      "complete cadence before the final cue"
+    ]
+  },
+  "seedaudio": {
+    "output_format": "wav",
+    "sample_rate": 48000,
+    "theme_palette_seconds": 15
+  },
+  "mix": {
+    "cue_crossfade_seconds": 2.0,
+    "music_gain_db": -18.0,
+    "native_gain_db": 0.0,
+    "dialogue_ducking": {
+      "enabled": true,
+      "threshold": 0.08,
+      "ratio": 6.0,
+      "attack_ms": 20.0,
+      "release_ms": 500.0
+    },
+    "program_loudness_lufs": -16.0,
+    "true_peak_dbtp": -1.5
+  },
+  "cues": [
+    {
+      "cue_id": "cue-001",
+      "segment_ids": [1],
+      "narrative_role_en": "Opening orientation and statement of the emotional question.",
+      "dramatic_arc_en": "Begin sparse and curious, introduce the motif clearly, then create forward pull without resolution.",
+      "music_state_in_en": "Silence or a nearly inaudible tonal breath.",
+      "music_state_out_en": "Motif active, harmony open, momentum ready to continue.",
+      "dialogue_and_effect_space_en": "Keep the center and upper midrange sparse; pull energy beneath every spoken line and important native effect.",
+      "direction_en": "Let the first visual action trigger the motif. Support discovery without predicting the answer or cadencing at the Segment boundary.",
+      "cadence": "carry"
+    },
+    {
+      "cue_id": "cue-002",
+      "segment_ids": [2],
+      "narrative_role_en": "Development, complication, and change in the protagonist's understanding.",
+      "dramatic_arc_en": "Transform the same motif through greater motion and harmonic tension, then turn toward insight while remaining unresolved.",
+      "music_state_in_en": "Continue the open harmony and pulse inherited from cue-001.",
+      "music_state_out_en": "Tension released enough to reveal understanding, but final tonic withheld.",
+      "dialogue_and_effect_space_en": "Use thinner orchestration during explanation, leave rhythmic holes for action effects, and avoid masking consonants.",
+      "direction_en": "Track the actual dramatic turns inside the listed Segment range; make changes at story beats, not at arbitrary shot cuts.",
+      "cadence": "carry"
+    },
+    {
+      "cue_id": "cue-003",
+      "segment_ids": [3],
+      "narrative_role_en": "Payoff, emotional integration, and closing memory.",
+      "dramatic_arc_en": "Return the motif in its clearest transformed form, let the lesson and emotion align, and reserve the only full cadence for the authored ending.",
+      "music_state_in_en": "Enter from cue-002's suspended harmony without a restart.",
+      "music_state_out_en": "One complete, warm final cadence followed by a controlled natural decay.",
+      "dialogue_and_effect_space_en": "Stay restrained under the final explanation, bloom only after the last essential words, and preserve the native ending ambience.",
+      "direction_en": "Deliver payoff without sentimentality; place the final cadence exactly at picture end and do not introduce a new theme.",
+      "cadence": "final"
+    }
+  ]
+}

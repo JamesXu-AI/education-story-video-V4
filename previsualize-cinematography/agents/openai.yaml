@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cinematography Previsualization"
+  short_description: "Transparent shell for Seedance Master output"
+  default_prompt: "Use $previsualize-cinematography to forward this request to $seedance-master-skill Route A and transport its storyboard.md and storyboard-compile-manifest.json unchanged."

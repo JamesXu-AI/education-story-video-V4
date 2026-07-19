@@ -1,0 +1,39 @@
+{
+  "contract": "finish-boundary-qc-config/v1",
+  "enabled": true,
+  "auto_apply_safe_color_match": true,
+  "strict_sample": {
+    "frame_rate": 24,
+    "tail_seconds": 1.0,
+    "head_seconds": 1.0,
+    "frame_count": 48,
+    "evidence_frame_width": 960
+  },
+  "analysis": {
+    "width": 192,
+    "anchor_frame_count": 3,
+    "minimum_match_similarity": 0.9
+  },
+  "detection": {
+    "mean_luma_delta": 2.0,
+    "shadow_luma_delta": 4.0,
+    "highlight_luma_delta": 4.0,
+    "saturation_ratio_delta": 0.05,
+    "chroma_center_distance": 1.5
+  },
+  "safe_limits": {
+    "mean_luma_delta": 12.0,
+    "quantile_luma_delta": 16.0,
+    "minimum_saturation_factor": 0.8,
+    "maximum_saturation_factor": 1.25,
+    "maximum_chroma_shift": 6.0
+  },
+  "repair": {
+    "fade_seconds": 0.75,
+    "candidate_strengths": {
+      "soft": 0.7,
+      "matched": 1.0,
+      "strong": 1.2
+    }
+  }
+}

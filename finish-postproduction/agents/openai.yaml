@@ -1,0 +1,4 @@
+interface:
+  display_name: "Finish Postproduction · 无配乐主流程"
+  short_description: "完成原生对白与环境声剪辑、精确字幕和无背景音乐成片交付"
+  default_prompt: "使用 $finish-postproduction 完成 Seedance 原生对白、拟音和环境声的后期剪辑、精确字幕与最终成片；主流程不读取音乐计划、不调用 SeedAudio，背景音乐来源固定为 none。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Education Story Video V4"
+  short_description: "Orchestrate educational story-video production end to end"
+  default_prompt: "Use $education-story-video-v4 to run Route A and Route B, require every final Prompt binding to match assets.json semantics, route asset mismatches back to production design, and continue through verified final masters."

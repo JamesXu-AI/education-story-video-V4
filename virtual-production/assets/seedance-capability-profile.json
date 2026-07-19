@@ -1,0 +1,46 @@
+{
+  "contract": "seedance-capability-profile",
+  "profile_status": "TEMPLATE_REQUIRES_CURRENT_VERIFICATION",
+  "provider": "seedance",
+  "model_id": "replace-with-current-model-id",
+  "verified_at": "replace-with-ISO-8601-time",
+  "provider_capabilities": {
+    "minimum_segment_seconds": 4,
+    "maximum_segment_seconds": 15,
+    "maximum_reference_images": 9,
+    "maximum_reference_videos": 3,
+    "maximum_reference_audios": 3,
+    "native_audio_generation": true,
+    "native_background_audio_generation": true,
+    "supported_reference_roles": [
+      "reference_image",
+      "reference_audio",
+      "reference_video"
+    ]
+  },
+  "project_generation_policy": {
+    "maximum_total_seconds": 240,
+    "one_task_per_segment": true,
+    "seed_master_operations": [
+      "text_to_video",
+      "multimodal_reference",
+      "video_extension",
+      "strict_first_frame",
+      "strict_first_last"
+    ],
+    "predecessor_evidence_modes": [
+      "none",
+      "approved_complete_predecessor",
+      "approved_final_2s_silent_plus_provider_last_frame",
+      "approved_provider_last_frame"
+    ],
+    "matched_cut_tail_seconds": 2.0,
+    "continuity_reference_audio_policy": "preserve_for_extension_strip_for_matched_cut",
+    "return_last_frame_required": true,
+    "cross_clip_lipsync_dependency": false,
+    "cross_clip_dialogue_dependency": false,
+    "cross_clip_native_audio_dependency": "continuous_extension_only",
+    "maximum_inherited_video_hops": 1
+  },
+  "provider_adapter_path": "virtual-production/scripts/providers/seedance.py"
+}

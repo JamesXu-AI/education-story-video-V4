@@ -1,0 +1,4 @@
+interface:
+  display_name: "Virtual Production · 虚拟制片"
+  short_description: "Validate real assets, compile Route B, and run Seedance"
+  default_prompt: "Use $virtual-production to invoke Seed Master Route B, compare every final Prompt binding with assets.json semantics, route incompatibilities back to production design, materialize approved provider values, and execute the authored Seedance shooting-plan waves."
