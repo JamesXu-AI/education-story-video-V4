@@ -68,14 +68,15 @@ Maintain:
 - one full-body final-look character portrait and one unique speaker voice WAV/URI
   for every dialogue-owning entity; a portrait includes a prop/accessory only when
   production design determines that the current story, identity or continuity
-  requires it, plus a motivated anthropomorphic expression, active attention and
+  requires it, plus a motivated expression, active attention and
   readable thought; one art-derived group portrait per silent
   screenplay narrative role; appearance states, costumes, props, and location
   masters;
 - `location-continuity-packages.json`, containing topology and landmark text only.
 
-The location master is the only full-frame character-free environment image
-authority. Reuse it directly for every Scene and Segment bound to that location.
+The Scene-cast location master is the only full-frame environment image authority.
+It contains every current on-screen role asset used by its bound Scene, plus the
+stable location and fixed props. Reuse it directly for every Scene and Segment bound to that location.
 Do not generate a Scene background, global background, camera background, or other
 full-frame derivative of a location master. When time, weather, light, set state,
 topology, or fixed props materially change, author a distinct location master in
@@ -114,7 +115,14 @@ read the current `story.md`, screenplay, performance map, and aesthetic translat
 then author `direct-production-design/production-design-plan.json`. This is the only
 task-specific design authority for dialogue-character appearance, independently
 useful props, voice direction/sample/rate, appearance states, locations, topology,
-landmarks, and fixed-prop bindings. It must describe the actual current story rather than
+landmarks, fixed-prop bindings, and one semantic `character_background_location_id`.
+Use that location's model-authored environment description as the visible background
+authority for every character, costume-state, and ensemble asset. These images must
+not use a plain, solid-color, studio, catalogue, cutout, empty, or transparent
+background. Generate the final Scene-cast location image only after every role asset
+used by its bound Scene, and include the exhaustive current on-screen cast. If two
+Scenes at one place have different casts, author separate location assets. It must
+describe the actual current story rather than
 fill categories or copy examples.
 
 Repository scripts are generic executors. They may validate IDs and cross-file
@@ -128,19 +136,18 @@ fall back to hardcoded defaults.
 Aggregate speech ownership across the full current screenplay before generating any
 cast image. Only entities with at least one dialogue line receive a single-character
 image. Treat every `lead`, every `supporting` role and every other dialogue-owning
-individual as a main story character. Every non-human main story character must use
-an upright bipedal anthropomorphic performance body standing on two legs, while
-retaining unmistakable species head, markings, surface, ears, tail, trunk, wings or
-other defining anatomy. Do not generate a quadrupedal or neutral wildlife-form
-portrait for a main story character.
+individual as a main story character. Every non-human character must use the natural
+species body plan authored in `body_topology`: quadrupeds remain four-legged,
+insects retain their natural leg and wing plan, and birds retain two legs plus two
+wings. Do not add an upright humanized torso, arms, hands, feet, or bipedal stance to
+an animal.
 
-All characters, including silent group members, must show anthropomorphic inner
-life through gaze, expression, posture, attention and intention. Silent NPC groups
-need not share the main-character bipedal body plan unless separately promoted by
-the screenplay, but every member must use exactly one coherent species-appropriate
-body plan. Anthropomorphic expression must never add arms or hands to a quadruped,
-retain extra legs on a biped, or add arms to a bird beyond its two wings and two
-legs. Extra, duplicated, missing, fused, detached, or hybrid limbs are forbidden.
+All characters, including silent group members, must show characterful inner life
+through gaze, expression, species-appropriate posture, attention and intention.
+Every member must use exactly one coherent natural species body plan. Expression
+must never add arms or hands to a quadruped, remove or repurpose insect legs, or add
+arms to a bird beyond its two wings and two legs. Extra, duplicated, missing, fused,
+detached, hybrid, or humanized animal limbs are forbidden.
 Blank wildlife portraits are forbidden. A final-look portrait
 may be prop-free. Production design decides whether an independent prop asset is
 needed by asking whether the object carries story action, ownership/state change,
@@ -174,13 +181,15 @@ Build one topology package per location master following the
 [Location Continuity Package Contract](references/location-continuity-package-contract.md).
 It owns zones, connections, entrances/exits, obstacles, fixed props, immutable
 landmarks, time/weather, palette/materials, and primary light direction. It owns no
-view family and produces no derived image. The catalog location master is the only
-full-frame environment authority.
+view family and produces no derived image. The catalog Scene-cast location master is
+the only full-frame environment authority and includes all roles used by the bound
+Scene.
 
-A location master containing a fixed plot prop is not independent. Generate the
-canonical prop image first, then supply it as an ordered direct Seedream reference
-to the location master and require exact geometry, proportions, material, and
-silhouette. No secondary environment plate is generated from that master.
+A location master containing a fixed plot prop or Scene role is not independent.
+Generate canonical prop and role assets first, then supply them as ordered direct
+Seedream references to the Scene-cast location master. Require exact prop geometry
+and exact role identity, natural topology, costume, markings, and complete ensemble
+membership. No secondary environment plate is generated from that master.
 
 The current deterministic screenplay build/check and fast role-gate PASS are
 required before this department's assets may be handed to cinematography. There is

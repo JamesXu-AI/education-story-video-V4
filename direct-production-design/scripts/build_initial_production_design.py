@@ -46,6 +46,7 @@ from story_video.production_design_plan import (  # noqa: E402
 )
 from story_video.screenplay_contract import load_screenplay_file  # noqa: E402
 from story_video.visual_asset_generation import (  # noqa: E402
+    DEFAULT_IMAGE_SIZE,
     DEFAULT_TIMEOUT,
     generate_visual_asset,
 )
@@ -129,7 +130,7 @@ def _performance(entity: dict[str, Any]) -> dict[str, str]:
         "attention_logic_en": f"{label} looks first at the current speaker or action cause, then at its consequence, and never scans without motivation.",
         "listening_behavior_en": f"{label} keeps the mouth closed while listening and responds through eyes, breath and anatomically appropriate posture.",
         "speech_preparation_en": f"{label} establishes the correct eyeline, takes one grounded breath and prepares the face before exact dialogue begins.",
-        "embodied_acting_en": f"{label} uses the approved actor body with grounded balance, readable weight transfer and believable prop contact.",
+        "embodied_acting_en": f"{label} uses the approved species-appropriate body plan with grounded balance, readable weight transfer and believable prop contact.",
         "settle_behavior_en": f"{label} completes every action, closes the mouth and holds the changed state for the authored safe edit handle.",
         "forbidden_performance_en": f"{label} never loops, mugs, waves randomly, changes identity, teleports, continues across an editorial cut or invents extra action.",
     }
@@ -152,6 +153,81 @@ def _asset_job(
         "references": references,
         "depends_on": depends_on,
     }
+
+
+def _role_asset_ids_by_entity(
+    *,
+    entities: list[dict[str, Any]],
+    speaking_ids: set[str],
+    silent_groups: list[tuple[str, list[dict[str, Any]]]],
+) -> dict[str, str]:
+    """Map performance entities to visual role assets without story-name branches."""
+
+    result = {
+        entity["entity_id"]: entity["entity_id"]
+        for entity in entities
+        if entity["entity_id"] in speaking_ids
+    }
+    for role_type, group_entities in silent_groups:
+        asset_id = "group-" + _slug(role_type)
+        for entity in group_entities:
+            entity_id = entity["entity_id"]
+            if entity_id in result:
+                raise InitialProductionDesignError(
+                    f"Performance entity {entity_id} resolves to multiple role assets"
+                )
+            result[entity_id] = asset_id
+    if set(result) != {entity["entity_id"] for entity in entities}:
+        raise InitialProductionDesignError(
+            "Every current performance entity must resolve to one visual role asset"
+        )
+    return result
+
+
+def _scene_role_assets_by_location(
+    *,
+    plan: dict[str, Any],
+    performance: dict[str, Any],
+    entities: list[dict[str, Any]],
+    role_asset_by_entity: dict[str, str],
+) -> dict[str, list[str]]:
+    """Derive the exhaustive on-screen Scene cast for every location asset."""
+
+    entity_order = [entity["entity_id"] for entity in entities]
+    scene_entity_ids: dict[str, set[str]] = defaultdict(set)
+    for segment in performance["scene_segment_calls"]:
+        scene_id = segment["scene_id"]
+        for call in segment["calls"]:
+            if call.get("presence_mode") == "on_screen":
+                scene_entity_ids[scene_id].add(call["entity_id"])
+
+    result: dict[str, list[str]] = {}
+    for location in plan["locations"]:
+        location_id = location["location_id"]
+        ordered_role_sets: list[list[str]] = []
+        for scene_id in location["scene_ids"]:
+            entity_ids = scene_entity_ids.get(scene_id, set())
+            if not entity_ids:
+                raise InitialProductionDesignError(
+                    f"Scene {scene_id} has no on-screen role for {location_id}"
+                )
+            ordered_role_sets.append(
+                list(
+                    dict.fromkeys(
+                        role_asset_by_entity[entity_id]
+                        for entity_id in entity_order
+                        if entity_id in entity_ids
+                    )
+                )
+            )
+        first = ordered_role_sets[0]
+        if any(role_ids != first for role_ids in ordered_role_sets[1:]):
+            raise InitialProductionDesignError(
+                f"Location {location_id} binds Scenes with different on-screen casts; "
+                "author one location asset per distinct Scene cast"
+            )
+        result[location_id] = first
+    return result
 
 
 def _write_asset_plan(
@@ -366,7 +442,7 @@ def _generate_job(root: Path, job: dict[str, Any], timeout: int) -> dict[str, st
         prompt_file=brief_path,
         output_path=target,
         reference_images=job["references"],
-        size="2K",
+        size=DEFAULT_IMAGE_SIZE,
         timeout=timeout,
     )
     return {
@@ -512,6 +588,31 @@ def build_task(
     aesthetic_reference = load_aesthetic_reference(root)
     aesthetic_text = _aesthetic_prompt(aesthetic_reference)
 
+    role_asset_by_entity = _role_asset_ids_by_entity(
+        entities=entities,
+        speaking_ids=speaking_ids,
+        silent_groups=silent_groups,
+    )
+    scene_role_assets_by_location = _scene_role_assets_by_location(
+        plan=plan,
+        performance=performance,
+        entities=entities,
+        role_asset_by_entity=role_asset_by_entity,
+    )
+    background_location = next(
+        location
+        for location in plan["locations"]
+        if location["location_id"] == plan["character_background_location_id"]
+    )
+    character_background_design = {
+        "location_id": background_location["location_id"],
+        "description_en": background_location["description_en"],
+        "environment_state_en": background_location["environment_state_en"],
+        "lighting_state_en": background_location["lighting_state_en"],
+        "palette_materials_en": background_location["palette_materials_en"],
+    }
+    character_background_location_id = plan["character_background_location_id"]
+
     jobs: list[dict[str, Any]] = []
     output_by_asset: dict[str, Path] = {}
     for prop in plan["props"]:
@@ -564,24 +665,33 @@ def build_task(
                 asset_id=entity_id,
                 kind="character",
                 prompt=(
-                    "Generate one isolated full-body final-look portrait of exactly one "
-                    "dialogue-owning subject on a plain warm background. Use the exact "
+                    "Generate one full-body final-look portrait of exactly one "
+                    "dialogue-owning subject inside the task-bound environment "
+                    "described below. Never "
+                    "use a plain, solid-color, studio, catalogue, cutout, empty, or "
+                    "transparent background. The portrait subject must be the only "
+                    "living being anywhere in the image: no other person, animal, "
+                    "insect, crowd, silhouette, reflection, statue-like character, or "
+                    "distant background cameo. Use the exact "
                     "task-authored identity and costume below. Show a motivated expression, "
                     "active eyeline, visible attention and readable thought; never a blank "
-                    "stare or catalogue smile. If non-human, use the project's approved "
-                    "upright bipedal actor body while retaining unmistakable species anatomy. "
+                    "stare or catalogue smile. For every non-human, use the exact natural "
+                    "species body plan below: no humanized upright stance, human arms, "
+                    "hands, feet, or extra gestural limbs. "
                     "Preserve this model-authored body topology exactly; every listed limb "
                     "set is exhaustive, every listed non-limb appendage must remain a "
                     "non-limb, and no natural-animal limb pair may be retained in addition: "
                     + json.dumps(design["body_topology"], ensure_ascii=False)
                     + ". "
-                    "Use a grounded actor-ready styling pose, not a story action. No location, "
+                    "Use a grounded actor-ready styling pose, not a story action. No "
                     "contact sheet, turntable, multiple view, duplicate, text or logo."
                     + prop_instruction
                     + " TASK-AUTHORED CHARACTER DESIGN: "
                     + design["design_description_en"]
                     + " WRITER PERFORMANCE ENTITY: "
                     + speaker["description_en"]
+                    + " TASK-BOUND CHARACTER BACKGROUND DESIGN JSON: "
+                    + json.dumps(character_background_design, ensure_ascii=False)
                     + " "
                     + character_portrait_performance_brief(
                         screenplay=screenplay,
@@ -624,7 +734,12 @@ def build_task(
             _asset_job(
                 asset_id=asset_id,
                 kind="ensemble_roster",
-                prompt=group_brief + aesthetic_text,
+                prompt=(
+                    group_brief
+                    + " TASK-BOUND CHARACTER BACKGROUND DESIGN JSON: "
+                    + json.dumps(character_background_design, ensure_ascii=False)
+                    + aesthetic_text
+                ),
                 relative_path=output,
                 references=[],
                 depends_on=[],
@@ -648,9 +763,17 @@ def build_task(
                     "Generate one isolated appearance-state reference for the same character "
                     "shown in reference image 1. Preserve identity, anatomy, scale, base "
                     "costume and approved accessories exactly; change only the task-authored "
-                    "state. No second subject, attacker, scene, text, grid or logo. "
+                    "state. Preserve the task-bound environment declared below. "
+                    "Never use a plain, solid-color, studio, catalogue, cutout, "
+                    "empty, or transparent background. The referenced character must be "
+                    "the only living being anywhere in the image: no other person, animal, "
+                    "insect, crowd, silhouette, reflection, or distant background cameo. "
+                    "No second subject, attacker, text, "
+                    "grid or logo. "
                     "TASK-AUTHORED APPEARANCE STATE: "
                     + costume["description_en"]
+                    + " TASK-BOUND CHARACTER BACKGROUND DESIGN JSON: "
+                    + json.dumps(character_background_design, ensure_ascii=False)
                     + aesthetic_text
                 ),
                 relative_path=output,
@@ -662,6 +785,7 @@ def build_task(
     for location in plan["locations"]:
         asset_id = location["location_id"]
         prop_ids = location["fixed_prop_ids"]
+        role_asset_ids = scene_role_assets_by_location[asset_id]
         output = (
             Path("direct-production-design/assets/locations")
             / asset_id.removeprefix("loc-")
@@ -678,17 +802,31 @@ def build_task(
             if prop_ids
             else " No independent fixed plot prop is bound to this location."
         )
+        role_binding = (
+            " After any fixed-prop references, the remaining ordered reference images "
+            "correspond exactly to these exhaustive current Scene role assets: "
+            + json.dumps(role_asset_ids, ensure_ascii=False)
+            + ". Include every individual role exactly once. For an ensemble-roster "
+            "reference, include its complete approved group and every subject inside "
+            "that group exactly once. Preserve identity, natural species anatomy, "
+            "costume, proportions, markings, and closed roster. Omit none, substitute "
+            "none, duplicate none, and invent no additional person, animal, silhouette, "
+            "reflection, or cameo."
+        )
         jobs.append(
             _asset_job(
                 asset_id=asset_id,
                 kind="location_master",
                 prompt=(
-                    "Generate one finished empty 16:9 location master from the exact "
+                    "Generate one finished wide 16:9 Scene-cast location reference from "
+                    "the exact "
                     "task-authored design below. Preserve navigable geography, entrances, "
-                    "zones, landmarks, scale, materials and motivated light. Render zero "
-                    "people, characters, animals, crowds, silhouettes, reflections, subject "
-                    "shadows, portable props, text, logos, grids, or split layout."
+                    "zones, landmarks, scale, materials and motivated light. This must not "
+                    "be an empty or pure background: render the complete exhaustive current "
+                    "Scene cast visibly inside the environment. No text, logos, grids, or "
+                    "split layout."
                     + prop_binding
+                    + role_binding
                     + " TASK-AUTHORED LOCATION DESIGN: "
                     + location["generation_prompt_en"]
                     + " TOPOLOGY JSON: "
@@ -698,8 +836,9 @@ def build_task(
                     + aesthetic_text
                 ),
                 relative_path=output,
-                references=[output_by_asset[prop_id].as_posix() for prop_id in prop_ids],
-                depends_on=list(prop_ids),
+                references=[output_by_asset[prop_id].as_posix() for prop_id in prop_ids]
+                + [output_by_asset[role_id].as_posix() for role_id in role_asset_ids],
+                depends_on=[*prop_ids, *role_asset_ids],
             )
         )
 
@@ -783,7 +922,7 @@ def build_task(
         plan["characters"],
         timeout=timeout,
         max_workers=max_workers,
-        force_regenerate=force_regenerate | force_voice_regenerate,
+        force_regenerate=force_voice_regenerate,
     )
     _write_asset_plan(
         root,
@@ -890,7 +1029,10 @@ def build_task(
             "description_en": location["description_en"],
             "visual": visuals[location["location_id"]],
             "included_prop_ids": location["fixed_prop_ids"],
-            "authority": "location_master_with_current_props",
+            "included_role_asset_ids": scene_role_assets_by_location[
+                location["location_id"]
+            ],
+            "authority": "scene_cast_location_with_current_props_and_roles",
         }
 
     catalog = {
@@ -904,6 +1046,7 @@ def build_task(
     _write(root / "direct-production-design" / "assets.json", catalog)
 
     semantic_summary = {
+        "character_background_location_id": character_background_location_id,
         "character_designs": plan["characters"],
         "prop_designs": plan["props"],
         "costume_states": plan["costumes"],
@@ -913,6 +1056,9 @@ def build_task(
                 "scene_ids": item["scene_ids"],
                 "description_en": item["description_en"],
                 "fixed_prop_ids": item["fixed_prop_ids"],
+                "included_role_asset_ids": scene_role_assets_by_location[
+                    item["location_id"]
+                ],
             }
             for item in plan["locations"]
         ],
@@ -933,16 +1079,22 @@ def build_task(
         "The task-specific facts below were authored from the current story and "
         "screenplay before generation. Generic pipeline code does not infer or branch "
         "on their names. Dialogue portraits, silent role groups, props, appearance "
-        "states, locations, and fixed-prop bindings must preserve them exactly.\n\n```json\n"
+        "states, the character-background location, locations, and fixed-prop bindings "
+        "must preserve them exactly.\n\n```json\n"
         + json.dumps(semantic_summary, ensure_ascii=False, indent=2)
         + "\n```\n\n"
         "## Dependency rule\n\n"
         "Every asset with a declared dependency is generated only after its sources. "
         "A referenced prop's exact geometry and material bind every portrait or location "
-        "that includes it.\n\n"
+        "that includes it. Scene-cast location references are generated only after every "
+        "current Scene role asset, and must include the exhaustive bound cast.\n\n"
         "## Environment reference\n\n"
-        "The location master is the single full-frame character-free environment image "
-        "authority. Reuse it directly for every bound Scene and Segment. Never generate "
+        "The Scene-cast location reference is the single full-frame environment image "
+        "authority and includes every role used by its bound Scene. The task-semantic "
+        "character_background_location_id supplies textual forest environment design to "
+        "every character, costume, and ensemble reference without creating a generation "
+        "cycle. Reuse the Scene-cast location reference directly for every bound Scene "
+        "and Segment. Never generate "
         "a Scene background, global background, camera background, or other full-frame "
         "derivative of the location master."
         + aesthetic_spec
@@ -1045,8 +1197,9 @@ def main() -> int:
         default=[],
         metavar="ASSET_ID",
         help=(
-            "Force one current asset and every dependent asset to regenerate; "
-            "repeat for multiple current visual failures."
+            "Force one current visual asset and every dependent visual asset to "
+            "regenerate while preserving character voice; repeat for multiple "
+            "current visual failures."
         ),
     )
     args = parser.parse_args()

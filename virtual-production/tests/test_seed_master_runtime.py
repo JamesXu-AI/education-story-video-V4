@@ -15,13 +15,31 @@ if str(SCRIPT_ROOT) not in sys.path:
 from story_video.seed_master_runtime import (  # noqa: E402
     ACCEPTANCE_FIREWALL,
     PRESENTATION_FIREWALL,
+    SeedMasterRuntimeError,
     build_execution_plan,
+    manifest_segment_rows,
     parse_segment_script,
 )
 
 
-def _script(*, serial: bool = False) -> str:
-    if serial:
+def _script(*, serial: bool = False, soft_first_frame: bool = False) -> str:
+    if soft_first_frame:
+        status = "observed_adapted"
+        schedule = "serial_after_predecessor_review"
+        wave = 1
+        dependencies = "[segment-001]"
+        review = "true"
+        evidence = "approved_provider_last_frame"
+        recompile = "true"
+        editorial = "none"
+        video_scope = "none"
+        video_audio = "none"
+        bindings = (
+            "- B01 | @Image1 | provider_role=reference_image | element=continuity.selected_boundary_visual_state | shot_scope=Shot 1 | authority=soft predecessor last-frame continuity only | forbidden=strict first-frame pixels or replay"
+        )
+        binding_ids = "[B01]"
+        binding_count = 1
+    elif serial:
         status = "observed_adapted"
         schedule = "serial_after_predecessor_review"
         wave = 1
@@ -118,6 +136,10 @@ Preserve the consequence.
 
 Maintain the authored state and native audio.
 
+### 1.5 [CINEMATIC DIRECTION]
+
+- selected_cinematic_direction: {{"shot_ids":["SH-001"],"rules":["one narrative focus with motivated camera placement"],"scene_specific_implementation":"SH-001 holds on the affected listener's action from inside the scene and rejects frontal cast presentation."}}
+
 ## Part 2 — Ordered internal shots and performance
 
 ### Shot 1 — shot_id=SH-001 | location_id=LOC-001 | camera_id=CAM-001 | panel_id=PNL-001
@@ -130,18 +152,22 @@ Maintain the authored state and native audio.
 
 - none
 
-#### Storyboard Line Contracts
-
-- none
-
 #### Dramatic Action and Spatial Trace
 
 - action_contract: source_beat=BEAT-01A; subject=hero; dramatic_cause=truth; objective_tactic=hold; body_part=eyes; action=active stillness; range=small; speed=still; force=controlled; continuity=held; audience_effect=understanding; landing=resolved
 - facing_contract: source_beat=BEAT-01A; required=false; dramatic_function=orientation is irrelevant; start=not_applicable; relation=not_applicable; path=not_applicable; end=not_applicable; audience_effect=attention stays on the eyes
 
+#### Cinematic Staging Contract
+
+- cinematic_shot_contract: {{"shot_id":"SH-001","staging_implementation":"SH-001 frames only the listener's tightening hand behind a foreground edge while the speaker remains off-screen and the locked camera makes the power shift readable."}}
+
+#### Storyboard Line Contracts
+
+- none
+
 #### Direction
 
-Hold the authored state with native synchronized sound, then settle.
+SH-001 frames only the listener's tightening hand behind a foreground edge while the speaker remains off-screen and the locked camera makes the power shift readable. Hold the authored state with native synchronized sound, then settle.
 
 ## Part 3 — Continuity, audio, quality, and duration acceptance
 
@@ -149,13 +175,58 @@ Hold the authored state with native synchronized sound, then settle.
 """
 
 
+def _write_predecessor_attempt(root: Path) -> None:
+    source = root / ".pending/virtual-production/generation-segments/segment-001"
+    source.mkdir(parents=True)
+    (source / "video.mp4").write_bytes(b"video")
+    (source / "last-frame.png").write_bytes(b"frame")
+    source_script = root / ".pending/virtual-production/seedance-segment-scripts/segment-001.md"
+    source_script.parent.mkdir(parents=True)
+    source_script.write_text("source Script", encoding="utf-8")
+    source_plan = root / ".pending/virtual-production/seedance-execution-plans/segment-001.json"
+    source_plan.parent.mkdir(parents=True)
+    source_plan.write_text("{}", encoding="utf-8")
+    script_sha = hashlib.sha256(source_script.read_bytes()).hexdigest()
+    plan_sha = hashlib.sha256(source_plan.read_bytes()).hexdigest()
+    for filename, value in (
+        (
+            "production-record.json",
+            {
+                "status": "GENERATED",
+                "segment_id": "segment-001",
+                "provider_attempt_id": "segment-001__attempt-0002",
+                "seed_master_script_sha256": script_sha,
+                "seedance_execution_plan_sha256": plan_sha,
+            },
+        ),
+        ("artifacts.json", {"provider_attempt_id": "segment-001__attempt-0002"}),
+    ):
+        (source / filename).write_text(json.dumps(value), encoding="utf-8")
+
+
 class SeedMasterRuntimeTests(unittest.TestCase):
+    def test_runtime_rejects_prompt_without_cinematic_direction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "segment-002.md"
+            path.write_text(
+                _script().replace("### 1.5 [CINEMATIC DIRECTION]", "### 1.5 Removed"),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(SeedMasterRuntimeError, "cinematic direction"):
+                parse_segment_script(path)
+
     def test_parallel_script_resolves_asset_catalog_urls(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             path = root / "segment-002.md"
             path.write_text(_script(), encoding="utf-8")
             parsed = parse_segment_script(path)
+            self.assertNotIn("cinematic_shot_contract", parsed["prompt"])
+            self.assertNotIn("requirement_contract", parsed["prompt"])
+            self.assertIn(
+                "SH-001 frames only the listener's tightening hand",
+                parsed["prompt"],
+            )
             plan = build_execution_plan(
                 task_dir=root,
                 parsed=parsed,
@@ -193,6 +264,49 @@ class SeedMasterRuntimeTests(unittest.TestCase):
             plan["media_bindings"][0]["uri"],
             "https://example.test/location.png",
         )
+
+    def test_soft_first_frame_script_is_multimodal_not_strict(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "segment-002.md"
+            path.write_text(_script(soft_first_frame=True), encoding="utf-8")
+            parsed = parse_segment_script(path)
+
+        self.assertEqual(parsed["metadata"]["operation"], "multimodal_reference")
+        self.assertEqual(
+            parsed["metadata"]["required_predecessor_evidence"],
+            "approved_provider_last_frame",
+        )
+        self.assertEqual(parsed["bindings"][0]["provider_role"], "reference_image")
+
+    def test_soft_first_frame_execution_plan_binds_only_reference_image(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "segment-002.md"
+            path.write_text(_script(soft_first_frame=True), encoding="utf-8")
+            _write_predecessor_attempt(root)
+            plan = build_execution_plan(
+                task_dir=root,
+                parsed=parse_segment_script(path),
+                catalog={"assets": {}},
+                capability_profile={
+                    "contract": "seedance-capability-profile",
+                    "profile_status": "VERIFIED",
+                    "model_id": "seedance-test",
+                    "provider_capabilities": {
+                        "maximum_reference_images": 9,
+                        "maximum_reference_videos": 3,
+                        "maximum_reference_audios": 3,
+                    },
+                },
+                task={"input": {"resolution": "1080p", "aspect_ratio": "16:9"}},
+            )
+
+        self.assertEqual(plan["shooting_plan"]["operation"], "multimodal_reference")
+        self.assertEqual(plan["media_counts"]["reference_image"], 1)
+        self.assertEqual(plan["media_counts"]["reference_video"], 0)
+        self.assertEqual(plan["media_bindings"][0]["source_kind"], "provider_last_frame")
+        self.assertEqual(plan["media_bindings"][0]["provider_role"], "reference_image")
+        self.assertNotIn("first_frame", plan["seedance_parameters"])
 
     def test_dependent_script_locks_exact_predecessor_attempt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -253,6 +367,115 @@ class SeedMasterRuntimeTests(unittest.TestCase):
             {item["source_provider_attempt_id"] for item in plan["media_bindings"]},
             {"segment-001__attempt-0002"},
         )
+
+    def _write_manifest(self, root: Path, rows: list[dict[str, object]]) -> None:
+        path = root / "previsualize-cinematography/storyboard-compile-manifest.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps({"segments": rows}), encoding="utf-8")
+
+    def _manifest_rows(self, mode: str) -> list[dict[str, object]]:
+        opening = {
+            "segment_id": "segment-001",
+            "scene_ids": ["scene-001"],
+            "planned_wave": 0,
+        }
+        successor = {
+            "segment_id": "segment-002",
+            "scene_ids": ["scene-001"],
+            "parallelization_verdict": "serial_required_for_effect",
+            "schedule_mode": "serial_after_predecessor_review",
+            "planned_wave": 1,
+            "depends_on_segment_ids": ["segment-001"],
+            "boundary_semantic_verdict": "serial_inheritance_required",
+            "predecessor_review_required": True,
+            "successor_recompile_required": True,
+            "editorial_intent": "none",
+        }
+        if mode == "soft_first_frame":
+            successor.update(
+                {
+                    "operation": "multimodal_reference",
+                    "required_predecessor_evidence": "approved_provider_last_frame",
+                    "reference_video_scope": "none",
+                    "reference_video_audio": "none",
+                    "seam_class": "motivated_coverage_cut",
+                    "seam_resynthesis_allowed": "true",
+                    "camera_ensemble_color_resynthesis_allowed": "true",
+                }
+            )
+        elif mode == "predecessor_video":
+            successor.update(
+                {
+                    "operation": "video_extension",
+                    "required_predecessor_evidence": "approved_complete_predecessor",
+                    "reference_video_scope": "full_predecessor_for_extension",
+                    "reference_video_audio": "preserved_for_extension",
+                    "seam_class": "continuous_extension",
+                    "seam_resynthesis_allowed": "false",
+                    "camera_ensemble_color_resynthesis_allowed": "false",
+                }
+            )
+        elif mode == "parallel":
+            successor.update(
+                {
+                    "operation": "multimodal_reference",
+                    "required_predecessor_evidence": "none",
+                    "reference_video_scope": "none",
+                    "reference_video_audio": "none",
+                    "seam_class": "motivated_coverage_cut",
+                    "seam_resynthesis_allowed": "true",
+                    "camera_ensemble_color_resynthesis_allowed": "true",
+                    "parallelization_verdict": "effect_equivalent_or_better",
+                    "schedule_mode": "parallel",
+                    "planned_wave": 0,
+                    "depends_on_segment_ids": [],
+                    "boundary_semantic_verdict": "independent_effect_equivalent",
+                    "predecessor_review_required": False,
+                    "successor_recompile_required": False,
+                }
+            )
+        else:
+            raise AssertionError(f"unknown mode {mode}")
+        return [opening, successor]
+
+    def test_manifest_allows_same_scene_soft_first_frame_serial(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_manifest(root, self._manifest_rows("soft_first_frame"))
+            rows = manifest_segment_rows(root)
+        self.assertEqual(rows[1]["operation"], "multimodal_reference")
+
+    def test_manifest_allows_same_scene_predecessor_video_serial(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_manifest(root, self._manifest_rows("predecessor_video"))
+            rows = manifest_segment_rows(root)
+        self.assertEqual(rows[1]["operation"], "video_extension")
+
+    def test_manifest_rejects_same_scene_parallel_before_provider_work(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_manifest(root, self._manifest_rows("parallel"))
+            with self.assertRaisesRegex(SeedMasterRuntimeError, "must directly depend"):
+                manifest_segment_rows(root)
+
+    def test_manifest_allows_parallel_after_scene_change(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = self._manifest_rows("parallel")
+            rows[1]["scene_ids"] = ["scene-002"]
+            self._write_manifest(root, rows)
+            loaded = manifest_segment_rows(root)
+        self.assertEqual(loaded[1]["schedule_mode"], "parallel")
+
+    def test_manifest_rejects_strict_first_frame_as_soft_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = self._manifest_rows("soft_first_frame")
+            rows[1]["operation"] = "strict_first_frame"
+            self._write_manifest(root, rows)
+            with self.assertRaisesRegex(SeedMasterRuntimeError, "exactly one serial mode"):
+                manifest_segment_rows(root)
 
 
 if __name__ == "__main__":

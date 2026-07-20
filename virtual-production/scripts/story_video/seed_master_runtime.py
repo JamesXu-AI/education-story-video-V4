@@ -59,6 +59,12 @@ MANIFEST_ROW_RE = re.compile(
     r"shot_scope=([^|\n]+) \| authority=([^|\n]+) \| forbidden=([^\n]+)$",
     re.MULTILINE,
 )
+CINEMATIC_DIRECTION_ROW_RE = re.compile(
+    r"^- selected_cinematic_direction:\s*(\{.*\})\s*$", re.MULTILINE
+)
+CINEMATIC_SHOT_CONTRACT_ROW_RE = re.compile(
+    r"^- cinematic_shot_contract:\s*(\{.*\})\s*$", re.MULTILINE
+)
 PRESENTATION_FIREWALL = (
     "Visual style, cinematography, lighting, production design, and rendering are "
     "presentation-only; preserve every approved narrative fact, participant, visible "
@@ -203,7 +209,76 @@ def _prompt_from_text(text: str, path: Path) -> str:
         raise SeedMasterRuntimeError(f"{path.name} is missing the exact presentation firewall")
     if prompt.count(ACCEPTANCE_FIREWALL) != 1:
         raise SeedMasterRuntimeError(f"{path.name} is missing the exact acceptance firewall")
-    return prompt.strip()
+    cinematic_heading = "### 1.5 [CINEMATIC DIRECTION]"
+    if prompt.count(cinematic_heading) != 1:
+        raise SeedMasterRuntimeError(f"{path.name} must contain one cinematic direction section")
+    direction_rows = CINEMATIC_DIRECTION_ROW_RE.findall(prompt)
+    if len(direction_rows) != 1:
+        raise SeedMasterRuntimeError(
+            f"{path.name} must contain one selected_cinematic_direction row"
+        )
+    try:
+        selected_direction = json.loads(direction_rows[0])
+    except json.JSONDecodeError as exc:
+        raise SeedMasterRuntimeError(
+            f"{path.name} selected_cinematic_direction is invalid JSON"
+        ) from exc
+    shot_ids = [match.group(2).strip() for match in SHOT_RE.finditer(prompt)]
+    if selected_direction.get("shot_ids") != shot_ids:
+        raise SeedMasterRuntimeError(
+            f"{path.name} selected cinematic direction does not own the ordered Shots"
+        )
+    scene_implementation = selected_direction.get("scene_specific_implementation")
+    if (
+        not isinstance(scene_implementation, str)
+        or any(shot_id not in scene_implementation for shot_id in shot_ids)
+    ):
+        raise SeedMasterRuntimeError(
+            f"{path.name} cinematic implementation must name every ordered Shot"
+        )
+    cinematic_contracts = CINEMATIC_SHOT_CONTRACT_ROW_RE.findall(prompt)
+    if len(cinematic_contracts) != len(shot_ids):
+        raise SeedMasterRuntimeError(
+            f"{path.name} must contain exactly one cinematic_shot_contract per Shot"
+        )
+    contract_shot_ids: list[str] = []
+    for row in cinematic_contracts:
+        try:
+            contract = json.loads(row)
+        except json.JSONDecodeError as exc:
+            raise SeedMasterRuntimeError(
+                f"{path.name} contains invalid cinematic_shot_contract JSON"
+            ) from exc
+        contract_shot_ids.append(str(contract.get("shot_id") or ""))
+        implementation = contract.get("staging_implementation")
+        if not isinstance(implementation, str) or prompt.count(implementation) != 2:
+            raise SeedMasterRuntimeError(
+                f"{path.name} cinematic staging implementation must occur in its contract and once in Direction"
+            )
+    if contract_shot_ids != shot_ids:
+        raise SeedMasterRuntimeError(
+            f"{path.name} cinematic Shot contracts are out of order or misbound"
+        )
+    # Route B contract rows are auditable compiler evidence, not provider prose.
+    # Every requirement/line/cinematic implementation has already been proven to
+    # occur in the actual target Direction or setup by Seed Master's validators.
+    # Strip the redundant metadata sections only after all runtime checks so the
+    # provider receives the concise scene-specific instructions rather than a
+    # duplicated JSON schema wall.
+    provider_prompt = re.sub(
+        r"\n### 1\.0 Storyboard source coverage\n.*?(?=\n### 1\.1 Generation contract)",
+        "",
+        prompt,
+        flags=re.DOTALL,
+    )
+    provider_prompt = re.sub(
+        r"\n#### Cinematic Staging Contract\n.*?"
+        r"\n#### Storyboard Line Contracts\n.*?(?=\n#### Direction)",
+        "",
+        provider_prompt,
+        flags=re.DOTALL,
+    )
+    return provider_prompt.strip()
 
 
 def _manifest_section(prompt: str, path: Path) -> str:
@@ -324,8 +399,20 @@ def _validate_shooting_plan(metadata: dict[str, Any], segment_id: str) -> None:
         ):
             raise SeedMasterRuntimeError(f"{segment_id} matched-cut contract is contradictory")
     elif evidence == "approved_provider_last_frame":
-        if scope != "none" or audio != "none":
-            raise SeedMasterRuntimeError(f"{segment_id} last-frame-only contract is contradictory")
+        if not (
+            operation == "multimodal_reference"
+            and schedule == "serial_after_predecessor_review"
+            and seam == "motivated_coverage_cut"
+            and editorial == "none"
+            and scope == "none"
+            and audio == "none"
+            and metadata["seam_resynthesis_allowed"] is True
+            and metadata["camera_ensemble_color_resynthesis_allowed"] is True
+        ):
+            raise SeedMasterRuntimeError(
+                f"{segment_id} provider-last-frame continuity must be a soft "
+                "multimodal reference-image contract, not strict first-frame control"
+            )
     elif evidence == "none" and (scope != "none" or audio != "none"):
         raise SeedMasterRuntimeError(f"{segment_id} independent plan declares predecessor video")
 
@@ -771,5 +858,76 @@ def manifest_segment_rows(task_dir: Path) -> list[dict[str, Any]]:
         if not isinstance(segment_id, str) or not SEGMENT_RE.fullmatch(segment_id) or segment_id in seen:
             raise SeedMasterRuntimeError("Storyboard compile manifest has invalid Segment IDs")
         seen.add(segment_id)
+        _unique_string_list(
+            row.get("scene_ids"),
+            f"{segment_id}.scene_ids",
+            allow_empty=False,
+        )
         result.append(row)
+    _validate_manifest_same_scene_serial(result)
     return result
+
+
+def _validate_manifest_same_scene_serial(rows: list[dict[str, Any]]) -> None:
+    """Block provider work unless every same-Scene boundary uses one approved mode."""
+
+    for predecessor, successor in zip(rows, rows[1:]):
+        predecessor_id = str(predecessor["segment_id"])
+        successor_id = str(successor["segment_id"])
+        predecessor_scenes = set(predecessor["scene_ids"])
+        successor_scenes = set(successor["scene_ids"])
+        shared_scenes = sorted(predecessor_scenes & successor_scenes)
+        if not shared_scenes:
+            continue
+
+        predecessor_wave = predecessor.get("planned_wave")
+        expected_wave = predecessor_wave + 1 if isinstance(predecessor_wave, int) else None
+        if not (
+            successor.get("schedule_mode") == "serial_after_predecessor_review"
+            and successor.get("depends_on_segment_ids") == [predecessor_id]
+            and successor.get("planned_wave") == expected_wave
+            and successor.get("boundary_semantic_verdict")
+            == "serial_inheritance_required"
+            and successor.get("parallelization_verdict") == "serial_required_for_effect"
+            and successor.get("predecessor_review_required") is True
+            and successor.get("successor_recompile_required") is True
+        ):
+            raise SeedMasterRuntimeError(
+                f"{successor_id} shares Scene(s) {shared_scenes} with {predecessor_id} "
+                "and must directly depend on it through serial predecessor review"
+            )
+
+        soft_first_frame_contract = {
+            "operation": "multimodal_reference",
+            "required_predecessor_evidence": "approved_provider_last_frame",
+            "reference_video_scope": "none",
+            "reference_video_audio": "none",
+            "seam_class": "motivated_coverage_cut",
+            "editorial_intent": "none",
+            "seam_resynthesis_allowed": "true",
+            "camera_ensemble_color_resynthesis_allowed": "true",
+        }
+        predecessor_video_contract = {
+            "operation": "video_extension",
+            "required_predecessor_evidence": "approved_complete_predecessor",
+            "reference_video_scope": "full_predecessor_for_extension",
+            "reference_video_audio": "preserved_for_extension",
+            "seam_class": "continuous_extension",
+            "editorial_intent": "none",
+            "seam_resynthesis_allowed": "false",
+            "camera_ensemble_color_resynthesis_allowed": "false",
+        }
+        matches_soft_first_frame = all(
+            successor.get(field) == expected
+            for field, expected in soft_first_frame_contract.items()
+        )
+        matches_predecessor_video = all(
+            successor.get(field) == expected
+            for field, expected in predecessor_video_contract.items()
+        )
+        if not (matches_soft_first_frame or matches_predecessor_video):
+            raise SeedMasterRuntimeError(
+                f"{successor_id} shares a Scene with {predecessor_id} and must use "
+                "exactly one serial mode: soft provider-last-frame reference image "
+                "or complete predecessor-video reference"
+            )

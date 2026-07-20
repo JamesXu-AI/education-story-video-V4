@@ -31,7 +31,7 @@ ASSET_KINDS = frozenset(
 ASSET_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 SIZE_RE = re.compile(r"^(?:[1-9][0-9]{2,4}x[1-9][0-9]{2,4}|[1-9][0-9]*[Kk])$")
 MAX_REFERENCE_IMAGES = 10
-DEFAULT_IMAGE_SIZE = "2K"
+DEFAULT_IMAGE_SIZE = seedream.SEEDREAM_MAX_IMAGE_SIZE
 DEFAULT_TIMEOUT = seedream.core.DEFAULT_TIMEOUT
 
 
@@ -202,13 +202,14 @@ def build_provider_request(
     image_size = _require_text(size, "size")
     if not SIZE_RE.fullmatch(image_size):
         raise VisualAssetGenerationError(
-            "size must be WIDTHxHEIGHT or a resolution token such as 2K."
+            "size must be WIDTHxHEIGHT or a provider-supported resolution token."
         )
     images = list(reference_images)
     request: dict[str, Any] = {
         "model": seedream.SEEDREAM_MODEL_ID,
         "prompt": _require_text(prompt, "prompt"),
         "size": image_size,
+        "output_format": "png",
         "response_format": "url",
         "watermark": False,
     }

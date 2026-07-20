@@ -76,6 +76,7 @@ def _validate_full_trace_coverage(task_dir: Path) -> None:
     expected: set[tuple[str, str]] = set()
     for key, source_type, id_field in (
         ("segments", "segment", "segment_id"),
+        ("boundaries", "boundary", "boundary_id"),
         ("shots", "shot", "shot_id"),
         ("lines", "line", "line_id"),
         ("beats", "beat", "beat_id"),

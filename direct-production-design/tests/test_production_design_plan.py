@@ -25,6 +25,7 @@ class ProductionDesignPlanTests(unittest.TestCase):
             path.parent.mkdir(parents=True)
             payload = {
                 "contract": "production-design-plan",
+                "character_background_location_id": "loc-harbor",
                 "characters": [
                     {
                         "entity_id": "navigator",
@@ -91,6 +92,49 @@ class ProductionDesignPlanTests(unittest.TestCase):
             self.assertEqual(plan["characters"][0]["entity_id"], "navigator")
             self.assertEqual(plan["props"][0]["asset_id"], "prop-compass")
             self.assertEqual(plan["locations"][0]["location_id"], "loc-harbor")
+            self.assertEqual(
+                plan["character_background_location_id"], "loc-harbor"
+            )
+
+    def test_character_background_must_reference_current_location(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / PLAN_RELATIVE_PATH
+            path.parent.mkdir(parents=True)
+            payload = {
+                "contract": "production-design-plan",
+                "character_background_location_id": "loc-missing",
+                "characters": [],
+                "props": [],
+                "costumes": [],
+                "locations": [
+                    {
+                        "location_id": "loc-harbor",
+                        "scene_ids": ["scene-001"],
+                        "description_en": "One stable empty harbor set.",
+                        "generation_prompt_en": "An empty navigable harbor at dawn.",
+                        "fixed_prop_ids": [],
+                        "environment_state_en": "Stable dry harbor weather.",
+                        "lighting_state_en": "Soft dawn light from camera left.",
+                        "palette_materials_en": "Weathered wood and muted blue stone.",
+                        "topology": {},
+                        "landmarks": [],
+                    }
+                ],
+            }
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            performance = {
+                "performance_entities": [],
+                "scene_segment_calls": [],
+            }
+            screenplay = {"scenes": [{"scene_id": "scene-001"}]}
+
+            with self.assertRaisesRegex(
+                ValueError, "character_background_location_id"
+            ):
+                load_production_design_plan(
+                    root, performance=performance, screenplay=screenplay
+                )
 
     def test_generic_builder_contains_no_current_story_identity_branch(self) -> None:
         source = (
@@ -106,6 +150,8 @@ class ProductionDesignPlanTests(unittest.TestCase):
             "forest-throne",
             "forest-clearing",
             "saudi-home",
+            "inside the forest environment",
+            "forest identity",
         ):
             self.assertNotIn(forbidden, source)
 

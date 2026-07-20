@@ -164,6 +164,7 @@ def _catalog_semantics(
         "sound_role",
         "owner_character_id",
         "included_prop_ids",
+        "included_role_asset_ids",
         "performance",
         "body_topology",
     ):

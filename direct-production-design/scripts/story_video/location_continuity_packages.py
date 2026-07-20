@@ -1,7 +1,7 @@
 """Strict loader for the production-design-owned location continuity packages.
 
 The package is the single textual spatial authority for every recurring location.
-The matching catalog location master is the only visual environment authority.
+The matching catalog Scene-cast location master is the visual environment authority.
 """
 
 from __future__ import annotations
@@ -319,6 +319,7 @@ def _validate_location(
     return {
         "location_id": location_id,
         "scene_ids": scene_ids,
+        "scene_role_asset_ids": list(asset["included_role_asset_ids"]),
         "environment_state_en": _text(
             location["environment_state_en"], f"{location_id}.environment_state"
         ),
@@ -421,8 +422,9 @@ def location_continuity_authority_for_storyboard(
     return {
         "location_id": location["location_id"],
         "location_master_asset_id": location["location_id"],
+        "scene_role_asset_ids": list(location["scene_role_asset_ids"]),
         "scene_id": scene_id,
-        "reference_mode": "location_master_image_with_topology_text",
+        "reference_mode": "scene_cast_location_master_image_with_topology_text",
         "environment_state_en": location["environment_state_en"],
         "lighting_state_en": location["lighting_state_en"],
         "palette_materials_en": location["palette_materials_en"],

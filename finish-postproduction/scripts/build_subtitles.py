@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from functools import lru_cache
 import json
 from pathlib import Path
 import re
@@ -208,7 +209,49 @@ def _split_oversized_unit(
             )
         chunks.append(separator.join(units[cursor:best_end]))
         cursor = best_end
-    return chunks
+
+    # The greedy pass above establishes the minimum number of screens, but it
+    # can leave a one-word (or one-character) final screen. Redistribute the
+    # same exact units across that minimum screen count so every screen carries
+    # a comparable reading load while still satisfying the line limits.
+    screen_count = len(chunks)
+    if screen_count <= 1:
+        return chunks
+    target_units = len(units) / screen_count
+
+    @lru_cache(maxsize=None)
+    def balanced_split(cursor: int, screens_left: int) -> tuple[float, tuple[int, ...]] | None:
+        if screens_left == 0:
+            return (0.0, ()) if cursor == len(units) else None
+        last_end = len(units) - (screens_left - 1)
+        best: tuple[float, tuple[int, ...]] | None = None
+        for end in range(cursor + 1, last_end + 1):
+            candidate = separator.join(units[cursor:end])
+            if _try_wrap(
+                candidate,
+                is_cjk=is_cjk,
+                line_limit=line_limit,
+                max_lines=max_lines,
+            ) is None:
+                break
+            remainder = balanced_split(end, screens_left - 1)
+            if remainder is None:
+                continue
+            cost = (end - cursor - target_units) ** 2 + remainder[0]
+            proposal = (cost, (end,) + remainder[1])
+            if best is None or proposal[0] < best[0]:
+                best = proposal
+        return best
+
+    split = balanced_split(0, screen_count)
+    if split is None:
+        return chunks
+    balanced: list[str] = []
+    cursor = 0
+    for end in split[1]:
+        balanced.append(separator.join(units[cursor:end]))
+        cursor = end
+    return balanced
 
 
 def _caption_chunks(

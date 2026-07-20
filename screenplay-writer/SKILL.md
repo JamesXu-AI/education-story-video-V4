@@ -1,6 +1,6 @@
 ---
 name: screenplay-writer
-description: Think as a master animation screenwriter and turn task.json plus story.md into story-treatment.md, structured screenplay.md, audio-timeline.json, and character-performance-map.json. Own audience/dramatic strategy, exact dialogue, complete 4–15 second mini-plots, Seedance-feasible cast/group scope, semantic visual-continuity requirements, and story-motivated transitions without choosing assets or cameras.
+description: "Think as a master animation screenwriter and turn task.json plus story.md into story-treatment.md, structured screenplay.md, audio-timeline.json, and character-performance-map.json. Own audience/dramatic strategy, exact dialogue, effect-first Scene/Segment packing, Seedance-feasible cast/group scope, and story-level boundary semantics. Force every adjacent same-Scene Segment pair into one of two serial continuation classes: soft first-frame reference after a settled or motivated cut, or predecessor-video reference for unfinished action, performance, blocking, or camera motion. Use for screenplay creation or repair where cinematic action, facing, eyelines, or dramatic continuity must survive later Seedance generation."
 ---
 
 # Screenplay Writer
@@ -20,8 +20,22 @@ reaction, visual causality, escalation, reversal, consequence, rhythm, climax, a
 resolution. Do not mechanically summarize prose or split it every 15 seconds.
 
 This department owns why and how the story is dramatized. It decides exact
-dialogue, performance entities, Scene/Segment boundaries, continuity, and every
-transition. There is no director write-back or transition approval stage.
+dialogue, performance entities, Scene/Segment boundaries, narrative continuity,
+and the dramatic purpose of every transition. It does not pre-empt the director:
+cinematography and Seedance compilation may choose a stronger executable cut,
+reference, operation, or serial dependency that preserves the same story facts,
+dialogue, performance obligations, and dramatic purpose. A downstream semantic
+review may return a boundary for writer repair when the authored split damages the
+finished result.
+
+It is also the first owner of cinematic viability. Every Scene must have a concrete
+purpose, central objective, obstacle, opening power relation, turning point,
+changed outcome, visible spatial/action progression, and exit impulse. Every
+Dramatic Beat must contain one perceptible change, one physical objective, visible
+action, important reaction, spatial change, dialogue/sound behavior, entry/exit
+state, and one visual focus. Screenplay does not choose final camera parameters,
+but it may not defer conflict, behavior, dynamic space, or ensemble differentiation
+to Storyboard.
 
 ## Inputs
 
@@ -36,9 +50,11 @@ contradictory, or unparseable story authority; never invent missing facts. Only
 Write:
 
 - `story-treatment.md`: audience promise, point of view, dramatic/dialogue
-  strategy, independent-Segment strategy, transition grammar, safety, and ending;
-- `screenplay.md`: story, performance, exact dialogue, transitions, Segment
-  boundaries, and narrative start/end states;
+  strategy, effect-first Segment and boundary strategy, transition grammar,
+  safety, and ending;
+- `screenplay.md`: story, cinematic Scene contracts, Dramatic Beat-to-block
+  mappings, performance, exact dialogue, transitions, Segment boundaries, and
+  narrative start/end states;
 - `audio-timeline.json`: every dialogue and native-sound intention with timing;
 - `character-performance-map.json`: who appears, performs, speaks, narrates,
   recurs, changes state, and owns action obligations in every Scene/Segment.
@@ -65,6 +81,30 @@ losslessly to full states and Anchors.
 
 ## Segment contract
 
+Before Segment packing, run the Screenplay Gate internally as a combined
+screenwriter/dramaturg, director, performance-blocking, cinematography-editor, and
+continuity review. Reject and rewrite a Scene if it lacks objective/obstacle or a
+changed result; mainly consists of stationary information exchange; detaches
+dialogue from action/reaction; keeps everyone in one undifferentiated spatial
+layer; gives an ensemble no distinct action/reaction/support/atmosphere duties; or
+starts and ends in effectively the same visible state. Store the exact Scene
+contract in `scene_dramatic_contract_json`. Run the semantic Screenplay Gate
+internally and repair every failure, but do not persist a pass/fail review object;
+a self-declared `pass` cannot override a script-false reading.
+
+Store ordered `dramatic_beats_json` in every Segment. Beat quantity follows real
+dramatic changes, never punctuation or a fixed quota. Each Beat uniquely owns one
+or more 1-based screenplay `block_indexes`; together the Beats partition every
+Action and Dialogue block exactly once. A Beat that owns dialogue must also own an
+Action block so speech stays embedded in behavior. For group material, every Beat
+names action subject, reaction subject, supporting group, atmosphere presence, and
+one visual focus; reactions must be differentiated rather than synchronized.
+
+Obvious cast-lineup, semicircle, camera-facing, or take-turns-speaking Action is a
+deterministic blocker, but semantic review remains authoritative. The proper repair
+is character objective, tactic, reaction, and spatial progression—not decorative
+movement or camera language.
+
 A Scene is the continuous dramatic event defined by its primary time and place. A
 Scene may and usually will contain several Segments. Decide Scenes before splitting
 them into Seedance-sized Segments. Never create a new Scene merely because 15
@@ -74,24 +114,41 @@ Scene only when the primary time, place, or enclosing narrative event genuinely
 changes. Scene Segment ranges must be consecutive, exhaustive, and non-overlapping.
 
 One Segment is one future Seedance video: integer 4–15 seconds and total film at
-most 240 seconds. Use the fewest Segments that remain performable and controllable;
-do not optimize for the highest Segment count. Treat 4–7-second Segments as an
-exception for naturally short complete dramatic units, not as the default rhythm.
-Declare each Segment's incoming visual need as `independent`, `state_match`, or
-`continuous_motion`. This is a semantic requirement only: cinematography later
-chooses `none`, `final_frame`, or the immediate predecessor's silent final two
-seconds. An explicit same-environment return may name any earlier Segment whose
-final frame should be available. Never carry cross-clip dialogue, lip sync, or
-native audio.
+most 240 seconds. Design the strongest finished scene and performance flow before
+thinking about independent generation. Use the fewest Segments that remain
+performable and controllable; do not optimize for Segment count, parallel waves,
+or provider convenience. Treat 4–7-second Segments as exceptional.
 
-Every Segment must express one complete micro-plot or micro-conflict:
-`established pressure/situation -> objective or dramatic need -> obstacle,
-complication, or resistance -> action/tactic and response -> turn, result, or
-changed state -> stable safe-cut handoff`. It may contain several performance beats,
-internal Shots, cuts, reactions, and compatible action waves; one beat, one line,
-one reaction, one camera change, or one crowd pass is not automatically a Segment.
-Never cut inside a sentence, causal beat, unfinished action, lip movement, camera
-move, or native-sound event.
+Classify every incoming boundary from the actual dramatic and visual state; never
+default all rows to one mode:
+
+- `incoming_visual_requirement: independent`: only a genuine Scene, primary-time, primary-place,
+  or enclosing-event discontinuity; never an adjacent same-Scene boundary;
+- `incoming_visual_requirement: state_match`: every retained same-Scene boundary after the
+  outgoing action reaches a readable settled phase. This requires serial
+  `first_frame_reference`: downstream uses the approved predecessor last frame as
+  an ordinary soft `reference_image`, not a strict/API first-frame lock. Preserve
+  identity, body/prop state, blocking/facing, eyeline, light, and composition
+  relationships while allowing the motivated new Shot to evolve;
+- `incoming_visual_requirement: continuous_motion`: one unfinished visual action,
+  performance tactic, entrance/contact, blocking/facing phase, or camera phase
+  deliberately continues through serial `predecessor_video_reference`.
+
+These are mandatory semantic and dependency classes. Cinematography later resolves
+the approved predecessor attempt and executable binding, but cannot turn a retained
+same-Scene boundary into independent generation or reinterpret
+`first_frame_reference` as `strict_first_frame`. Never bind an asset URL here. Never split
+one spoken line, lip-synchronization phrase, or indivisible native-sound event, but
+visual action, performance, blocking, facing, eyeline, or camera motion may cross
+the boundary when `continuous_motion` explicitly names the inherited phase.
+
+A complete micro-plot or micro-conflict must survive at the Scene or dependency-
+chain level. An independent Segment normally lands a readable turn; a serial
+Segment may own only the performable portion that fits before the 15-second limit
+and may end on an intentional moving handoff. Each Segment still needs a concrete
+opening Action, development, and boundary Action. It may contain several internal
+Shots, cuts, reactions, and compatible action waves; one beat, line, reaction,
+camera change, or crowd pass is not automatically a Segment.
 
 Before locking any same-Scene boundary, audit the two adjacent Segments as one
 candidate Segment. Merge them when their complete combined micro-plot fits within
@@ -99,8 +156,8 @@ candidate Segment. Merge them when their complete combined micro-plot fits withi
 operation/reference or performance-complexity conflict requires separate
 generation. Keep the boundary only when the merged task would exceed time or
 performability, violate the role/reference budget, require incompatible generation
-inputs, cross a genuine Scene/time/place reset, or combine two independently
-complete dramatic turns whose joint generation would be unreliable. A new internal
+    inputs, or combine two complete dramatic turns whose joint generation would be
+    unreliable. A new internal
 Shot, reaction, speaker, or isolated action wave is never sufficient justification.
 
 Do not pad a Segment to its target duration. Every sustained look, hold, silence,
@@ -108,8 +165,10 @@ breath, or still pose must actively change pressure, information, relationship,
 expectation, or the readability of a result. A static profile, empty stare,
 repeated breathing, redundant reaction, or settled pose held for several seconds
 without a new dramatic event is meaningless waiting and must be removed, shortened,
-or replaced by causal behavior. Keep only story-motivated silence and the brief
-editable handle needed after a readable result.
+or replaced by causal behavior. Keep only story-motivated silence and a boundary-
+appropriate handle: a readable landing for `independent`, a matchable state for
+`state_match`, or useful terminal motion for `continuous_motion`. Never force a
+character to freeze merely to manufacture an independent cut.
 
 ## Performance and continuity
 
@@ -141,8 +200,9 @@ O.S./V.O.; and at most two silent group-role types. This limit applies separatel
 to each Segment and does not limit the total number of dialogue-owning characters
 across the complete screenplay. This is story/performance budgeting, not asset
 selection. Production design chooses and generates the actual images;
-cinematography chooses reference bindings, Shots, cameras, and the serial/parallel
-shooting plan.
+cinematography chooses reference bindings, Shots, and cameras. The screenplay fixes
+same-Scene execution as serial; downstream may schedule genuine Scene/time/event
+discontinuities independently.
 
 Determine dialogue ownership across the complete screenplay before applying the
 per-Segment budget. An entity that speaks anywhere remains a dialogue-owning
@@ -156,12 +216,14 @@ speech plus speaker-change/pause allowance divided by Segment duration—must no
 exceed 45% for action-led Segments, 60% for mixed dialogue/action Segments, or 72%
 for dialogue-led Segments. Classification follows the actual dramatic workload,
 not the most permissive threshold. The deterministic timing floor is
-`dialogue_words / 2.6 + dialogue_turns * 0.25 + 1.0` seconds, and every Segment
-must contain at least three blocks with independent opening and safe-cut closing
-Actions. Every Segment must complete all dialogue,
-native sound, primary action and causal result, then retain about 0.8 seconds for a
-readable result/reaction and safe edit. Each Segment has one clear primary event;
-do not overload it with parallel complex action chains or exact interactions.
+`dialogue_words / 2.6 + dialogue_turns * 0.25 + 1.0` seconds. Every Segment must
+contain at least three blocks with a concrete opening Action and an explicit
+boundary Action. Complete every Dialogue block and indivisible native-sound event
+inside the Segment. Complete the primary action and causal result only when the
+boundary is `independent`; for `state_match` expose the exact settled match state;
+for `continuous_motion` expose the unfinished phase that the successor must
+inherit. Each Segment has one clear primary event or continuous phase; do not
+overload it with unrelated complex action chains.
 
 Preserve identity, relationships, story-significant appearance state, acquired information,
 emotion, injury, prop ownership/state, location facts, chronology, causality, and
@@ -182,19 +244,28 @@ Select a story-motivated transition at every boundary:
 - effects: a story-motivated effect, light event, particle event, or environmental event;
 - closure: final end.
 
-State why it occurs, what the outgoing clip completes, how the successor
-independently establishes, and how narrative/action/space/sound connect. Describe
-only the story event and audience effect. Production design chooses its visual form;
-cinematography chooses its implementation. Neither may replace its story purpose.
+State why it occurs, what the outgoing clip completes or intentionally leaves in
+motion, how the successor establishes or inherits its opening, and how narrative,
+performance, blocking/facing, action, space, and sound connect. Describe story and
+performance semantics rather than media files. Production design chooses visual
+form; cinematography chooses implementation and may strengthen the edit or serial
+inheritance without changing its story purpose.
 
 ## Collaboration-owned validation and handoff
 
 The writer collaboration owns the complete release judgment. Before handoff, audit
 every Segment and adjacent boundary for duration, total runtime, dialogue occupancy,
-action density, unique primary event, readable causal result, about 0.8 seconds of
-active closure, continuity, mandatory same-Scene merging, and meaningless waiting.
-These checks are the writer collaboration's release responsibility; do not launch a
-second Codex reviewer or persist an analysis artifact.
+action density, causal flow, boundary-appropriate terminal state, continuity,
+mandatory same-Scene merging, and meaningless waiting. This is an internal semantic
+gate, not a keyword count. For every boundary, reason in turn as screenwriter/
+dramaturg, director, performance-and-blocking director, cinematographer/editor,
+continuity supervisor, and Seedance generation specialist. Each role must inspect
+both adjacent dramatic states and answer whether a same-Scene boundary must merge,
+use `state_match` / soft `first_frame_reference`, use `continuous_motion` /
+`predecessor_video_reference`, or be rewritten. `independent` is categorically
+invalid inside one Scene, even when action has settled or a coverage cut is
+motivated. For a true Scene/time/event change, independent execution still requires
+unanimous approval. Do not persist a separate analysis artifact.
 
 The active writer collaboration must read the fixed generation prompt and author
 the three formal files directly in `TASK_DIR/screenplay-writer/`. Do not invoke a
@@ -211,10 +282,11 @@ authorization is required. `seedance-video-review` is an optional shared diagnos
 tool, never a mandatory acceptance stage.
 
 After each build, read the actual `audio-timeline.json`, recompute every Segment's
-dialogue occupancy and available action/reaction/0.8-second closure time, audit
-every adjacent same-Scene pair for mandatory merging, and repair the formal files
-until this complete collaboration preflight passes. Then run the deterministic
-check and fast role gate.
+dialogue occupancy and available action/reaction/boundary-handle time, audit every
+adjacent same-Scene pair for mandatory merging and the correct single
+`incoming_visual_requirement`, and
+repair the formal files until the semantic preflight passes. Then run the
+deterministic check and fast role gate.
 
 After deterministic build/check, run the fast role/image-scope gate:
 

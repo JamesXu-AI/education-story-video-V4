@@ -85,9 +85,20 @@ the active task; never turn review into a separate approval-file workflow.
 
 1. Establish `TASK_DIR`, validate `task.json`, and require the current `story.md`.
    When story preparation is part of the request, use only the repository-local
-   prompts and scripts under `screenplay-writer`; do not use another Skill.
+   prompts and scripts under `screenplay-writer`; do not use another Skill. Story
+   must provide goals, obstacles, visible/audible triggers, actions, reactions,
+   differentiated ensemble behavior, causal turns, and changed results without
+   choosing cameras.
 2. Execute `screenplay-writer`. Build and check the screenplay package, then run
-   the fast role/asset-scope gate.
+   the fast role/asset-scope gate. Do not proceed unless every Scene has its current
+   cinematic dramatic contract and passed semantic Screenplay Gate, every Dramatic
+   Beat has one visual focus and complete block coverage, dialogue is embedded in
+   action/reaction, and the Scene changes visual/spatial state. A failure returns to
+   Screenplay; no downstream camera or Prompt patch may disguise it. Every retained
+   adjacent same-Scene Segment boundary must already be classified for serial soft
+   first-frame reference after a settled motivated cut, or serial predecessor-video
+   reference for an unfinished action/performance/blocking/camera phase. Same-Scene
+   `independent` is a screenplay failure.
 3. The screenplay collaboration must directly complete its generatability, action
    density, dialogue occupancy, closure, continuity, merge, and waiting audit before
    the fast role/asset-scope gate. After that gate returns `PASS` with image
@@ -110,14 +121,28 @@ the active task; never turn review into a separate approval-file workflow.
    returned `storyboard.md` and `storyboard-compile-manifest.json` bytes verbatim at
    `TASK_DIR/previsualize-cinematography/`; do not add a local schema, converted
    companion, wrapper, or acceptance layer. `storyboard.data.json` does not exist
-   and is forbidden throughout the repository.
+   and is forbidden throughout the repository. Route A must return any missing
+   action/spatial/visual focus to Screenplay; it must convert approved Dramatic
+   Beats into one-task Shots with motivated camera, layered blocking, selective
+   ensemble control, and passed five-question cinematic reviews. Route A must make
+   every overlapping `scene_ids` pair directly serial: `multimodal_reference` plus
+   provider-last-frame soft reference image for settled cuts, or complete-predecessor
+   `video_extension` for unfinished phases. Soft reference is not strict/API
+   first-frame control, and matched-tail evidence is not a third same-Scene mode.
 5. Require that final Route A package, then execute `virtual-production`. It invokes
    Seed Master Route B and persists its Segment Scripts/trace/ledgers. Before URL
    materialization, compare every provider-token responsibility and owned
    Storyboard requirement with the selected semantic row in `assets.json`. Only a
    current Prompt/assets.json semantic compatibility PASS may enter an execution
    plan. SHA values bind the decision to current Prompt/catalog data but never
-   substitute for the semantic comparison.
+   substitute for the semantic comparison. Route B may clarify execution language
+   but may not reinvent Scene conflict, blocking, Shot focus, camera logic, or
+   continuity. A Prompt missing exact Shot translation or the fixed cinematic
+   direction firewall is blocked before provider submission. Before materialization
+   or any provider call, virtual production must reject same-Scene parallel,
+   strict-first-frame substitution, matched-tail substitution, missing direct
+   predecessor dependency, or a mismatch between settled/unfinished phase and the
+   selected one of the two serial contracts.
 6. If that gate emits
    `.pending/virtual-production/asset-rework-requests/segment-NNN.json`, stop all
    affected Seedance submissions and return to `direct-production-design`. Use the

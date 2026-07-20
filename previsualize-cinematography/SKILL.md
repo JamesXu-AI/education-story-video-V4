@@ -1,6 +1,6 @@
 ---
 name: previsualize-cinematography
-description: Transparently invoke seedance-master-skill for cinematography and return its output unchanged. Use when this repository routes screenplay-to-storyboard, camera, blocking, lighting, sound, editing, or other Seedance previsualization work through the cinematography department; this Skill is only a compatibility shell and owns no creative, routing, schema, validation, or publishing logic.
+description: "Transparently invoke seedance-master-skill for cinematography and return its output unchanged, including its mandatory same-Scene serial shooting-plan contract and Route A boundary validation. Use when this repository routes screenplay-to-storyboard, camera, blocking, lighting, sound, editing, or other Seedance previsualization work through the cinematography department; this Skill is only a compatibility shell and owns no creative, routing, schema, validation, or publishing logic."
 ---
 
 # Cinematography Previsualization · 摄影预演
@@ -23,7 +23,14 @@ When the repository requires artifact paths, save Seed Master's returned Route A
 `TASK_DIR/previsualize-cinematography/`. Creating the directory and writing those
 unchanged files are transport operations only. The manifest is Seed Master's own
 mandatory Route A output, not a local companion. Do not create `storyboard.data.json`,
-an envelope, a compatibility artifact, or an alternate Storyboard representation.
+an envelope, a compatibility artifact, an alternate Storyboard representation, or
+an ad-hoc `build_storyboard.py` that reconstructs or mechanically decorates Shot
+fields. Route A itself must run Seed Master's `validate_route_a_storyboard.py`
+before these two files are transported; Route B must not be the first consumer to
+discover missing or generic cinematic fields. Transport Seed Master's same-Scene
+serial decisions unchanged: soft provider-last-frame reference-image continuity for
+settled motivated cuts, and complete-predecessor video reference for unfinished
+phases. Do not rewrite soft first-frame reference into strict first-frame control.
 
 If `seedance-master-skill` cannot be invoked, report the invocation failure as the
 blocker. Never substitute local reasoning or another Skill.

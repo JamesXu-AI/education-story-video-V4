@@ -61,6 +61,13 @@ automatic Segment continuity. Review mismatches visually and request a revision;
 not turn these presentation notes into mandatory asset-catalog fields or
 schema-validation failures.
 
+Every character-class image is staged in the location selected by the task-semantic
+`character_background_location_id`. Use that location's model-authored description,
+environment state, palette, materials, depth, and motivated light. This applies to
+identity portraits, costume/appearance-state plates, and ensemble portraits. Never
+use a plain, solid-color, studio, catalogue, cutout, empty, or transparent backdrop.
+The staged background does not make the character image an environment authority.
+
 Its presentation expression must make the character's exact first authored
 Dialogue `delivery_en` readable through face, eyes, eyeline and grounded posture,
 with the mouth naturally closed. That concrete expression prevents a blank or
@@ -72,20 +79,18 @@ listening, speech preparation, anatomy-appropriate embodied action, settle behav
 and forbidden empty performance. Reveal intention through gaze, recognition, breath,
 blink, grounded weight, contact, reaction, changed state, and a settled hold.
 
-Every character must be anthropomorphic in performance: gaze selects a subject,
-expression reveals pressure or judgment, posture carries intention, and the face
-shows active thought rather than a blank animal stare. For non-human actors retain
+Every character must show active inner life: gaze selects a subject, expression
+reveals pressure or judgment, species-appropriate posture carries intention, and the
+face shows active thought rather than a blank animal stare. For non-human actors retain
 unmistakable species head, surface, markings, ears, tail, trunk, wings, antennae or
 other defining features.
 
 Every `lead`, `supporting` role and other dialogue-owning individual is a main story
-character. A non-human main story character uses an upright bipedal actor body,
-stands on two legs and adapts upper limbs into expressive arms or gestural limbs.
-This is deliberate anthropomorphic casting, not an accidental animal body. Preserve
-grounded weight, usable joints and species recognition. During visual review, flag
-quadrupedal lead portraits, neutral wildlife anatomy, empty mascot smiles and
-rubber-limbed posing for revision; do not make those observations asset-catalog
-schema errors.
+character, but role importance never changes natural anatomy. A non-human character
+uses its exact species-appropriate body plan: quadrupeds remain quadrupeds, insects
+retain their natural legs and wings, and birds retain two legs plus two wings. Flag
+upright animal bipeds, humanized torsos, arms, hands, feet, empty mascot smiles,
+rubber-limbed posing, and any topology drift for revision.
 
 ## Environment and production design
 
@@ -94,11 +99,11 @@ surface language, dressing density, cultural specificity, atmosphere, weather,
 time-of-day state, and background hierarchy. Dressing must support story function,
 depth, route comprehension, and focus; random decoration is not authority.
 
-Location assets govern stable geometry and production design, not a final camera.
-Provide reusable location masters as the default. When a materially different
-Storyboard setup cannot be communicated reliably by the master and structured
-camera text, execute the fewest approved background-only camera views. Those views
-may include fixed set dressing but never characters or portable plot props.
+Location assets govern stable geometry, production design, and the exhaustive Scene
+role population, not one final shot. Generate the Scene-cast location master only
+after its current role and fixed-prop assets, then include all of them visibly. Do
+not create an empty or character-free location plate. A materially different Scene
+cast requires a distinct location asset even when the physical place is unchanged.
 
 ## Props, costumes, and materials
 

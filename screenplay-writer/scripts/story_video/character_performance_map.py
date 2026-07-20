@@ -487,7 +487,7 @@ def role_asset_scope_gate(task_dir: Path) -> dict[str, Any]:
         "contract": "role-asset-scope-gate/v1",
         "status": "PASS",
         "image_asset_generation": "UNLOCKED",
-        "detailed_screenplay_review": "RUN_IN_PARALLEL",
+        "detailed_screenplay_review": "COMPLETED_IN_WRITER_PREFLIGHT",
         "dialogue_entities": [
             {
                 "entity_id": entity_id,

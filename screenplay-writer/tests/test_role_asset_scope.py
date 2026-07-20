@@ -105,6 +105,10 @@ class RoleAssetScopeTests(unittest.TestCase):
         self.assertEqual(result["status"], "PASS")
         self.assertEqual(result["image_asset_generation"], "UNLOCKED")
         self.assertEqual(
+            result["detailed_screenplay_review"],
+            "COMPLETED_IN_WRITER_PREFLIGHT",
+        )
+        self.assertEqual(
             [item["entity_id"] for item in result["dialogue_entities"]], ["hero"]
         )
         self.assertEqual(
@@ -130,8 +134,17 @@ class RoleAssetScopeTests(unittest.TestCase):
         )
         self.assertIn("static_reference_image_count", generation_prompt)
         self.assertIn("dramatic_workload", generation_prompt)
+        self.assertIn("scene_dramatic_contract_json", generation_prompt)
+        self.assertIn("dramatic_beats_json", generation_prompt)
+        self.assertNotIn("screenplay_gate_review", generation_prompt)
+        self.assertIn("action_subject", generation_prompt)
         self.assertIn("这些检查是编剧协作本身的发布责任", generation_prompt)
-        self.assertIn("至少约 0.8 秒", generation_prompt)
+        self.assertIn("不得把“可独立生成”当成默认创作目标", generation_prompt)
+        self.assertIn("走位/朝向", generation_prompt)
+        self.assertIn("continuous_motion", generation_prompt)
+        self.assertIn("Mandatory internal semantic boundary gate", generation_prompt)
+        self.assertIn("先临时隐藏已有", generation_prompt)
+        self.assertNotIn("每个 Segment 必须自己拥有完整表演和声音", generation_prompt)
         self.assertIn(
             f"dialogue_words / {DIALOGUE_WORDS_PER_SECOND}", generation_prompt
         )

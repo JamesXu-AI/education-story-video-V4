@@ -133,6 +133,26 @@ change of heart, or newly invented solution.
 The story must read as a complete narrative rather than a synopsis, event list,
 lesson outline, screenplay, or mechanical summary.
 
+## Visualizable dramatic foundation
+
+The Story stage does not choose Shots, camera positions, lenses, blocking marks, or
+Seedance instructions. It must nevertheless give the Screenplay stage events that
+can become cinema. Drive the story through character goals, obstacles, choices,
+visible or audible triggers, attempts, reactions, changed conditions, and earned
+results. Every important turn changes a relationship, balance of power, physical
+situation, knowledge state, or available choice in a way that can later be shown or
+heard.
+
+Avoid making narration explain events that could happen in the scene, long blocks
+of background exposition, or repeated gatherings where everyone discusses the
+plot. In ensemble material, preserve distinct positions and behaviors among
+characters or groups: one may act, another resist, another observe or hide, and a
+larger presence may register through pressure or sound. Do not flatten everyone
+into a single synchronized audience. If the input is mainly explanatory or
+narrative prose, retain its facts but supply concrete causal events for the
+Screenplay writer to dramatize; never merely distribute narration among characters
+to read aloud.
+
 Do not compress an already complete source into a shorter generic retelling. There
 is no word-count target. Let the amount of source action, dialogue, atmosphere,
 reaction, and consequence determine the story's necessary length.
@@ -325,6 +345,13 @@ Before writing `story.md`, silently confirm that:
 - no unrelated main plot was introduced;
 - the protagonist has a clear reason to act;
 - major events have understandable causes and consequences;
+- every important turn has a visible or audible trigger, character behavior, and
+  changed relationship, power, knowledge, or physical condition that downstream
+  Screenplay can dramatize;
+- ensemble characters or groups have differentiated positions and behaviors
+  instead of functioning as one synchronized audience;
+- the plot is not mainly a sequence of group discussions or narration explaining
+  actions that never occur;
 - the difficulty, turning point or climax, and ending are complete;
 - educational or emotional value is demonstrated through action and
   consequence;

@@ -1,4 +1,4 @@
-"""Parse and validate the current independent-Segment screenplay contract."""
+"""Parse and validate the effect-first Seedance Segment screenplay contract."""
 
 from __future__ import annotations
 
@@ -114,7 +114,6 @@ CONTINUITY_BOUNDARY_TABLE_COLUMNS = (
     "Anchor Policy JSON",
 )
 STATE_REF_KEYS = frozenset({"state_ref"})
-BOUNDARY_REF_KEYS = frozenset({"boundary_ref"})
 ANCHOR_POLICY_KEYS = frozenset({"default", "overrides"})
 ANCHOR_POLICY_DEFAULT_KEYS = frozenset({"status", "reason_en"})
 ANCHOR_POLICY_OVERRIDE_KEYS = frozenset({"status", "reason_en"})
@@ -126,18 +125,51 @@ SCREENPLAY_SEGMENT_FIELDS = (
     "location_time_environment_en",
     "characters_json",
     "narrative_purpose_en",
+    "scene_dramatic_contract_json",
+    "dramatic_beats_json",
     "start_state_json",
     "end_state_json",
-    "last_visible_narrative_action_en",
-    "next_segment_start_state_json",
-    "previous_continuity_en",
-    "next_transition_intent_en",
     "transition_design_json",
-    "continuity_mode",
     "incoming_visual_requirement",
-    "continuity_anchors_json",
 )
-CONTINUITY_MODES = {"editorial_cut", "continuous_action"}
+SCENE_DRAMATIC_FIELDS = (
+    "scene_id",
+    "scene_purpose",
+    "character_objective",
+    "obstacle",
+    "power_relationship",
+    "turning_point",
+    "outcome",
+    "visual_progression",
+    "exit_impulse",
+)
+DRAMATIC_BEAT_FIELDS = (
+    "beat_id",
+    "narrative_change",
+    "active_character",
+    "physical_objective",
+    "visible_action",
+    "important_reaction",
+    "spatial_change",
+    "dialogue_or_sound",
+    "entry_state",
+    "exit_state",
+    "action_subject",
+    "reaction_subject",
+    "supporting_group",
+    "atmosphere_presence",
+    "visual_focus",
+    "block_indexes",
+)
+DRAMATIC_BEAT_ID_RE = re.compile(r"^BEAT-[A-Za-z0-9_.-]+$")
+STAGE_TABLEAU_RISK_RE = re.compile(
+    r"\b(?:all\s+(?:the\s+)?(?:animals|characters|people|villagers|students|guests|"
+    r"workers|soldiers|courtiers)|everyone|the\s+(?:animals|characters|group|cast|crowd))\b"
+    r"[^.!?]{0,100}\b(?:stand|stands|stood|standing|line\s+up|lined\s+up|semicircle)\b|"
+    r"\b(?:take|takes|took)\s+turns?\s+(?:speaking|talking|answering)\b|"
+    r"\b(?:face|faces|facing|look|looks|looking)\s+(?:at|toward)?\s*(?:the\s+)?camera\b",
+    re.I,
+)
 INCOMING_VISUAL_REQUIREMENTS = {
     "independent",
     "state_match",
@@ -204,15 +236,20 @@ CONTINUITY_ANCHOR_KEYS = frozenset(CONTINUITY_ANCHOR_FIELDS)
 FORBIDDEN_CROSS_CLIP_DEPENDENCY_RE = re.compile(
     r"\b(?:previous|predecessor)\s+(?:last|final)\s+frame\b|"
     r"\b(?:previous|predecessor)\s+(?:full\s+)?video\b|"
-    r"\b(?:must|should|will)\s+continue\s+(?:the\s+)?(?:same\s+)?"
-    r"(?:motion|movement|walk|run|fight|camera|lip|pose)\b|"
-    r"\bcontinue(?:s|d|ing)?\s+(?:directly\s+)?from\s+(?:the\s+)?"
-    r"(?:previous|predecessor)\b|"
-    r"\b(?:must|should|will)\s+(?:keep|match|preserve|use)\s+(?:the\s+)?"
-    r"(?:same|exact)\s+(?:body\s+)?pose\b|"
-    r"\b(?:must|should|will)\s+(?:keep|match|preserve|use)\s+(?:the\s+)?"
-    r"exact\s+(?:character\s+)?position\b|"
-    r"\b(?:dialogue|native\s+sound)\s+(?:continues|carries|bridges|crosses)\b",
+    r"\b(?:dialogue|spoken\s+line|lip\s*sync|native\s+sound)\s+"
+    r"(?:continues|carries|bridges|crosses|spans)\b|"
+    r"\b(?:continue|carry|bridge|split)\s+(?:the\s+)?"
+    r"(?:same\s+)?(?:dialogue|spoken\s+line|lip\s*sync|native\s+sound)\b",
+    re.I,
+)
+INHERITED_VISUAL_PHASE_RE = re.compile(
+    r"\b(?:continue|continues|continued|continuing|resume|resumes|inherit|inherits|"
+    r"preserve|preserves|match|matches)\b[^.]{0,100}\b"
+    r"(?:motion|movement|action\s+phase|body\s+phase|pose|position|facing|"
+    r"screen\s+direction|eyeline|blocking|camera\s+(?:move|motion|phase)|"
+    r"performance\s+phase)\b|"
+    r"\b(?:same|exact|unfinished|inherited)\b[^.]{0,80}\b"
+    r"(?:motion|movement|pose|position|facing|blocking|camera|performance\s+phase)\b",
     re.I,
 )
 
@@ -631,7 +668,7 @@ def _resolve_compact_story_plans(
     state_map: dict[str, dict[str, str]],
     boundary_map: dict[str, dict[str, Any]],
 ) -> None:
-    for index, segment in enumerate(segments):
+    for segment in segments:
         plan = segment["story_plan"]
         compact = dict(plan)
         start_ref, start_state = _state_reference(
@@ -644,40 +681,41 @@ def _resolve_compact_story_plans(
             state_map=state_map,
             label=f"{plan['segment_id']}.end_state_json",
         )
-        next_value = plan["next_segment_start_state_json"]
-        if next_value is None:
+        plan["start_state_json"] = start_state
+        plan["end_state_json"] = end_state
+        segment["compact_refs"] = {
+            "start_state_ref": start_ref,
+            "end_state_ref": end_ref,
+            "story_plan_json": compact,
+        }
+
+    for index, segment in enumerate(segments):
+        plan = segment["story_plan"]
+        refs = segment["compact_refs"]
+        if index + 1 < len(segments):
+            successor_refs = segments[index + 1]["compact_refs"]
+            next_ref = successor_refs["start_state_ref"]
+            next_state = segments[index + 1]["story_plan"]["start_state_json"]
+        else:
             next_ref = None
             next_state = None
-        else:
-            next_ref, next_state = _state_reference(
-                next_value,
-                state_map=state_map,
-                label=f"{plan['segment_id']}.next_segment_start_state_json",
-            )
         if index == 0:
-            if plan["continuity_anchors_json"] != []:
-                raise StoryVideoError("segment-001 continuity_anchors_json must be []")
             boundary_ref = None
             anchors: list[dict[str, str]] = []
         else:
-            raw_boundary = plan["continuity_anchors_json"]
-            if not isinstance(raw_boundary, dict) or set(raw_boundary) != BOUNDARY_REF_KEYS:
-                raise StoryVideoError(
-                    f"{plan['segment_id']}.continuity_anchors_json must contain boundary_ref"
-                )
-            boundary_ref = raw_boundary.get("boundary_ref")
-            boundary = boundary_map.get(str(boundary_ref))
+            boundary_ref = f"boundary-{index:03d}"
+            boundary = boundary_map.get(boundary_ref)
             if boundary is None:
                 raise StoryVideoError(
-                    f"{plan['segment_id']} references an unknown continuity boundary"
+                    f"{plan['segment_id']} lacks its canonical adjacent continuity boundary"
                 )
             previous_plan = segments[index - 1]["story_plan"]
+            previous_refs = segments[index - 1]["compact_refs"]
             if (
                 boundary["from_segment_id"] != previous_plan["segment_id"]
                 or boundary["to_segment_id"] != plan["segment_id"]
-                or boundary["from_state_ref"]
-                != segments[index - 1]["compact_refs"]["end_state_ref"]
-                or boundary["to_state_ref"] != start_ref
+                or boundary["from_state_ref"] != previous_refs["end_state_ref"]
+                or boundary["to_state_ref"] != refs["start_state_ref"]
             ):
                 raise StoryVideoError(
                     f"{boundary_ref} does not bind the actual adjacent Segments and states"
@@ -687,16 +725,16 @@ def _resolve_compact_story_plans(
             anchors = _expand_anchor_policy(
                 boundary, from_state=from_state, to_state=to_state
             )
-        plan["start_state_json"] = start_state
-        plan["end_state_json"] = end_state
-        plan["next_segment_start_state_json"] = next_state
-        plan["continuity_anchors_json"] = anchors
-        segment["compact_refs"] = {
-            "start_state_ref": start_ref,
-            "end_state_ref": end_ref,
-            "next_state_ref": next_ref,
-            "boundary_ref": boundary_ref,
-            "story_plan_json": compact,
+        refs.update(
+            {
+                "next_state_ref": next_ref,
+                "boundary_ref": boundary_ref,
+            }
+        )
+        segment["derived_continuity"] = {
+            "next_segment_start_state": next_state,
+            "incoming_boundary_id": boundary_ref,
+            "anchors": anchors,
         }
 
 
@@ -813,6 +851,108 @@ def _validate_state(value: Any, *, label: str) -> None:
             raise StoryVideoError(f"{label}.{category} must be concrete")
 
 
+def _validate_scene_dramatic_contract(
+    value: Any, *, scene_id: str, label: str
+) -> None:
+    if not isinstance(value, dict) or tuple(value) != SCENE_DRAMATIC_FIELDS:
+        raise StoryVideoError(
+            f"{label} must contain the exact ordered cinematic Scene fields"
+        )
+    if value["scene_id"] != scene_id:
+        raise StoryVideoError(f"{label}.scene_id must equal {scene_id}")
+    for field in SCENE_DRAMATIC_FIELDS[1:]:
+        if not _concrete(value[field]):
+            raise StoryVideoError(f"{label}.{field} must be concrete")
+    if value["visual_progression"].strip().casefold() == value["outcome"].strip().casefold():
+        raise StoryVideoError(
+            f"{label}.visual_progression must describe visible spatial/action change, not restate outcome"
+        )
+
+
+def _validate_dramatic_beats(
+    value: Any,
+    *,
+    segment_id: str,
+    blocks: list[dict[str, Any]],
+    known_beat_ids: set[str],
+) -> None:
+    label = f"{segment_id}.dramatic_beats_json"
+    if not isinstance(value, list) or not value:
+        raise StoryVideoError(f"{label} must contain at least one Dramatic Beat")
+    covered_blocks: list[int] = []
+    for index, beat in enumerate(value, start=1):
+        beat_label = f"{label}[{index}]"
+        if not isinstance(beat, dict) or tuple(beat) != DRAMATIC_BEAT_FIELDS:
+            raise StoryVideoError(
+                f"{beat_label} must contain the exact ordered Dramatic Beat fields"
+            )
+        beat_id = beat["beat_id"]
+        if not isinstance(beat_id, str) or not DRAMATIC_BEAT_ID_RE.fullmatch(beat_id):
+            raise StoryVideoError(f"{beat_label}.beat_id must be one stable BEAT-* ID")
+        if beat_id in known_beat_ids:
+            raise StoryVideoError(f"screenplay.md repeats Dramatic Beat {beat_id}")
+        known_beat_ids.add(beat_id)
+        for field in DRAMATIC_BEAT_FIELDS[1:-1]:
+            if not _concrete(beat[field]):
+                raise StoryVideoError(f"{beat_label}.{field} must be concrete")
+        block_indexes = beat["block_indexes"]
+        if (
+            not isinstance(block_indexes, list)
+            or not block_indexes
+            or any(isinstance(item, bool) or not isinstance(item, int) for item in block_indexes)
+            or len(block_indexes) != len(set(block_indexes))
+        ):
+            raise StoryVideoError(
+                f"{beat_label}.block_indexes must be a nonempty unique integer list"
+            )
+        if any(item < 1 or item > len(blocks) for item in block_indexes):
+            raise StoryVideoError(f"{beat_label}.block_indexes contains an out-of-range block")
+        covered_blocks.extend(block_indexes)
+        owned_blocks = [blocks[item - 1] for item in block_indexes]
+        if any(block.get("type") == "dialogue" for block in owned_blocks) and not any(
+            block.get("type") == "action" for block in owned_blocks
+        ):
+            raise StoryVideoError(
+                f"{beat_label} contains dialogue without an owned action/reaction block"
+            )
+    expected_blocks = list(range(1, len(blocks) + 1))
+    if sorted(covered_blocks) != expected_blocks:
+        raise StoryVideoError(
+            f"{label} must partition every screenplay block exactly once"
+        )
+
+
+def validate_cinematic_segment_contract(
+    *,
+    segment_id: str,
+    scene_id: str,
+    scene_contract: Any,
+    dramatic_beats: Any,
+    blocks: list[dict[str, Any]],
+    known_beat_ids: set[str] | None = None,
+) -> None:
+    """Gate one screenplay Segment before Storyboard without choosing cameras."""
+
+    _validate_scene_dramatic_contract(
+        scene_contract,
+        scene_id=scene_id,
+        label=f"{segment_id}.scene_dramatic_contract_json",
+    )
+    _validate_dramatic_beats(
+        dramatic_beats,
+        segment_id=segment_id,
+        blocks=blocks,
+        known_beat_ids=known_beat_ids if known_beat_ids is not None else set(),
+    )
+    for block in blocks:
+        if block.get("type") == "action" and STAGE_TABLEAU_RISK_RE.search(
+            str(block.get("text_en") or "")
+        ):
+            raise StoryVideoError(
+                f"{segment_id} contains stage-tableau action language; rewrite character objectives, spatial roles, and visible behavior before Storyboard"
+            )
+
+
 def _validate_transition(value: Any, *, final: bool, segment_id: str) -> None:
     if not isinstance(value, dict) or set(value) != TRANSITION_DESIGN_KEYS:
         raise StoryVideoError(f"{segment_id} transition_design_json has invalid keys")
@@ -829,94 +969,53 @@ def _validate_transition(value: Any, *, final: bool, segment_id: str) -> None:
         raise StoryVideoError(f"{segment_id} transition contains forbidden cross-clip dependency")
 
 
-def screenplay_continuity_authority(segment: dict[str, Any]) -> dict[str, Any]:
-    plan = segment.get("story_plan")
-    if not isinstance(plan, dict):
-        raise StoryVideoError("Segment lacks story_plan")
-    return {
-        field: plan[field]
-        for field in (
-            "segment_id",
-            "scene_id",
-            "start_state_json",
-            "end_state_json",
-            "last_visible_narrative_action_en",
-            "next_segment_start_state_json",
-            "previous_continuity_en",
-            "next_transition_intent_en",
-            "transition_design_json",
-            "continuity_mode",
-            "continuity_anchors_json",
+def validate_adjacent_visual_boundary_contract(
+    *,
+    segment_id: str,
+    predecessor_plan: dict[str, Any],
+    current_plan: dict[str, Any],
+) -> None:
+    """Validate deterministic prerequisites for an authored visual inheritance."""
+
+    incoming_requirement = current_plan["incoming_visual_requirement"]
+    same_scene = predecessor_plan["scene_id"] == current_plan["scene_id"]
+    if same_scene and incoming_requirement == "independent":
+        raise StoryVideoError(
+            f"{segment_id} shares a Scene with its predecessor and cannot be "
+            "independent; use state_match for soft first-frame reference or "
+            "continuous_motion for predecessor-video reference"
         )
-    }
-
-
-def _issue(
-    current: dict[str, Any], previous: dict[str, Any], field: str, detail: str, suggestion: str
-) -> dict[str, str]:
-    return {
-        "scene_id": str(current["story_plan"].get("scene_id")),
-        "segment_id": str(current["story_plan"].get("segment_id")),
-        "adjacent_segment_id": str(previous["story_plan"].get("segment_id")),
-        "field": field,
-        "detail": detail,
-        "suggestion": suggestion,
-    }
-
-
-def adjacent_segment_continuity_issues(
-    screenplay: dict[str, Any]
-) -> list[dict[str, str]]:
-    segments = screenplay.get("segments")
-    if not isinstance(segments, list):
-        return []
-    issues: list[dict[str, str]] = []
-    for previous, current in zip(segments, segments[1:]):
-        previous_plan = previous.get("story_plan") or {}
-        current_plan = current.get("story_plan") or {}
-        previous_end = previous_plan.get("end_state_json")
-        promised_start = previous_plan.get("next_segment_start_state_json")
-        current_start = current_plan.get("start_state_json")
-        if promised_start != current_start:
-            issues.append(
-                _issue(
-                    current,
-                    previous,
-                    "start_state_json",
-                    "The predecessor promised start state differs from the successor opening state.",
-                    "Make next_segment_start_state_json exactly equal the next start_state_json.",
-                )
-            )
-        anchors = current_plan.get("continuity_anchors_json")
-        if isinstance(anchors, list):
-            by_category = {
-                item.get("category"): item for item in anchors if isinstance(item, dict)
-            }
-            for category in CONTINUITY_CATEGORIES:
-                anchor = by_category.get(category)
-                if not isinstance(anchor, dict):
-                    continue
-                if anchor.get("from_en") != (previous_end or {}).get(category):
-                    issues.append(
-                        _issue(
-                            current,
-                            previous,
-                            f"continuity_anchors_json.{category}.from_en",
-                            "Anchor source differs from predecessor end state.",
-                            "Copy the exact predecessor end-state fact into from_en.",
-                        )
-                    )
-                if anchor.get("to_en") != (current_start or {}).get(category):
-                    issues.append(
-                        _issue(
-                            current,
-                            previous,
-                            f"continuity_anchors_json.{category}.to_en",
-                            "Anchor target differs from successor start state.",
-                            "Copy the exact successor start-state fact into to_en.",
-                        )
-                    )
-    return issues
+    if not same_scene and incoming_requirement == "continuous_motion":
+        raise StoryVideoError(
+            f"{segment_id} continuous_motion cannot cross a Scene boundary"
+        )
+    if incoming_requirement != "continuous_motion":
+        return
+    predecessor_transition = predecessor_plan["transition_design_json"]
+    if predecessor_transition["type"] not in {
+        "hard_cut",
+        "action_cut",
+        "match_cut",
+        "eyeline_cut",
+        "reaction_cut",
+    }:
+        raise StoryVideoError(
+            f"{segment_id} continuous_motion requires a cut-like predecessor transition"
+        )
+    inherited_phase_text = " ".join(
+        str(value)
+        for value in (
+            predecessor_transition["outgoing_visible_en"],
+            predecessor_transition["incoming_visible_en"],
+            predecessor_transition["action_link_en"],
+            predecessor_transition["spatial_link_en"],
+        )
+    )
+    if not INHERITED_VISUAL_PHASE_RE.search(inherited_phase_text):
+        raise StoryVideoError(
+            f"{segment_id} continuous_motion must name the inherited visual, "
+            "performance, blocking, or camera phase"
+        )
 
 
 def validate_screenplay(screenplay: dict[str, Any]) -> None:
@@ -1117,6 +1216,8 @@ def validate_screenplay(screenplay: dict[str, Any]) -> None:
             to_state=state_by_id[boundary["to_state_ref"]],
         )
     runtime = 0
+    known_dramatic_beat_ids: set[str] = set()
+    scene_dramatic_contracts: dict[str, dict[str, Any]] = {}
     for index, segment in enumerate(segments, start=1):
         if segment.get("id") != index:
             raise StoryVideoError("screenplay.md Segment ids must be consecutive")
@@ -1132,9 +1233,9 @@ def validate_screenplay(screenplay: dict[str, Any]) -> None:
         ):
             raise StoryVideoError(
                 f"screenplay.md Segment {index} must contain at least "
-                f"{MINIMUM_SEGMENT_BLOCK_COUNT} beats, open with an independent "
-                "establishing Action, develop the local dramatic unit, and close "
-                "with a concrete safe-cut Action"
+                f"{MINIMUM_SEGMENT_BLOCK_COUNT} beats, open with a concrete Action, "
+                "develop the assigned dramatic phase, and close with an explicit "
+                "boundary Action"
             )
         plan = segment.get("story_plan")
         if not isinstance(plan, dict) or tuple(plan) != SCREENPLAY_SEGMENT_FIELDS:
@@ -1163,28 +1264,42 @@ def validate_screenplay(screenplay: dict[str, Any]) -> None:
                 f"{segment_id} dramatic_workload must be one of "
                 f"{sorted(DIALOGUE_OCCUPANCY_LIMITS)}"
             )
-        if plan["continuity_mode"] not in CONTINUITY_MODES:
-            raise StoryVideoError(f"{segment_id} continuity_mode is invalid")
+        validate_cinematic_segment_contract(
+            segment_id=segment_id,
+            scene_id=plan["scene_id"],
+            scene_contract=plan["scene_dramatic_contract_json"],
+            dramatic_beats=plan["dramatic_beats_json"],
+            blocks=blocks,
+            known_beat_ids=known_dramatic_beat_ids,
+        )
+        prior_scene_contract = scene_dramatic_contracts.get(plan["scene_id"])
+        if prior_scene_contract is None:
+            scene_dramatic_contracts[plan["scene_id"]] = plan[
+                "scene_dramatic_contract_json"
+            ]
+        elif prior_scene_contract != plan["scene_dramatic_contract_json"]:
+            raise StoryVideoError(
+                f"{segment_id} must repeat the same Scene dramatic contract across its Scene"
+            )
         incoming_visual_requirement = plan["incoming_visual_requirement"]
         if incoming_visual_requirement not in INCOMING_VISUAL_REQUIREMENTS:
             raise StoryVideoError(
                 f"{segment_id} incoming_visual_requirement is invalid"
             )
-        expected_continuity_mode = (
-            "continuous_action"
-            if incoming_visual_requirement == "continuous_motion"
-            else "editorial_cut"
-        )
-        if plan["continuity_mode"] != expected_continuity_mode:
+        if index == 1 and incoming_visual_requirement != "independent":
             raise StoryVideoError(
-                f"{segment_id} continuity_mode disagrees with its visual requirement"
+                "segment-001 must use independent as the project opening"
+            )
+        if index > 1:
+            predecessor_plan = segments[index - 2]["story_plan"]
+            validate_adjacent_visual_boundary_contract(
+                segment_id=segment_id,
+                predecessor_plan=predecessor_plan,
+                current_plan=plan,
             )
         for field in (
             "location_time_environment_en",
             "narrative_purpose_en",
-            "last_visible_narrative_action_en",
-            "previous_continuity_en",
-            "next_transition_intent_en",
         ):
             if not _concrete(plan[field]):
                 raise StoryVideoError(f"{segment_id} {field} must be concrete")
@@ -1201,17 +1316,7 @@ def validate_screenplay(screenplay: dict[str, Any]) -> None:
         _validate_state(plan["start_state_json"], label=f"{segment_id}.start_state_json")
         _validate_state(plan["end_state_json"], label=f"{segment_id}.end_state_json")
         final = index == len(segments)
-        next_state = plan["next_segment_start_state_json"]
-        if final:
-            if next_state is not None:
-                raise StoryVideoError(f"{segment_id} final next state must be null")
-        else:
-            _validate_state(next_state, label=f"{segment_id}.next_segment_start_state_json")
         _validate_transition(plan["transition_design_json"], final=final, segment_id=segment_id)
-        if plan["last_visible_narrative_action_en"] != blocks[-1].get("text_en"):
-            raise StoryVideoError(
-                f"{segment_id} last visible action must equal its closing Action block"
-            )
         if (
             plan["transition_design_json"]["outgoing_visible_en"]
             != blocks[-1].get("text_en")
@@ -1219,10 +1324,10 @@ def validate_screenplay(screenplay: dict[str, Any]) -> None:
             raise StoryVideoError(
                 f"{segment_id} transition outgoing visible state must equal its closing Action"
             )
-        anchors = plan["continuity_anchors_json"]
+        anchors = segment["derived_continuity"]["anchors"]
         if index == 1:
             if anchors != []:
-                raise StoryVideoError("segment-001 continuity_anchors_json must be []")
+                raise StoryVideoError("segment-001 derived continuity anchors must be []")
         else:
             if not isinstance(anchors, list) or len(anchors) != len(CONTINUITY_CATEGORIES):
                 raise StoryVideoError(f"{segment_id} must anchor every continuity category")
@@ -1343,16 +1448,6 @@ def validate_screenplay(screenplay: dict[str, Any]) -> None:
             raise StoryVideoError(
                 f"{segment_id} scene_id disagrees with the Scenes table"
             )
-    issues = adjacent_segment_continuity_issues(screenplay)
-    if issues:
-        detail = "\n- ".join(
-            "scene_id={scene_id} segment_id={segment_id} adjacent={adjacent_segment_id} "
-            "field={field}: {detail} Fix: {suggestion}".format(**issue)
-            for issue in issues
-        )
-        raise StoryVideoError(
-            "screenplay.md cross-Segment continuity validation failed:\n- " + detail
-        )
 
 
 def load_screenplay_file(path: str | Path) -> dict[str, Any]:

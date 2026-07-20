@@ -14,9 +14,10 @@ Each package contains only:
 
 The package has no `view_family`, camera position, framing, derived visual, or
 Seedream generation phase. The matching `location_master` in `assets.json` is the
-only full-frame environment image. Storyboard and Segment prompts reuse that master
-with the package's topology text; they may choose cameras but may not request or
-persist empty camera-background plates.
+only full-frame Scene-cast environment image and declares the exhaustive
+`included_role_asset_ids`. Storyboard and Segment prompts reuse that master with the
+package's topology text; they may choose cameras but may not request or persist
+empty or character-free camera-background plates.
 
 Any material change in time, weather, lighting, set state, topology, fixed props, or
 landmarks requires a distinct location master in the task-authored production-design

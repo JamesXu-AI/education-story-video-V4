@@ -1,4 +1,4 @@
 interface:
   display_name: "Cinematography Previsualization"
   short_description: "Transparent shell for Seedance Master output"
-  default_prompt: "Use $previsualize-cinematography to forward this request to $seedance-master-skill Route A and transport its storyboard.md and storyboard-compile-manifest.json unchanged."
+  default_prompt: "Use $previsualize-cinematography to forward this request to $seedance-master-skill Route A, require its full authored cinematic Shot schema and Route A validation before handoff, including the hard rule that adjacent same-Scene Segments are serial through either soft provider-last-frame reference-image continuity or complete-predecessor video reference. Preserve soft first-frame reference as multimodal reference rather than strict/API first-frame control. Transport only storyboard.md and storyboard-compile-manifest.json unchanged; do not synthesize a local build_storyboard.py or mechanically decorate compact Shots."

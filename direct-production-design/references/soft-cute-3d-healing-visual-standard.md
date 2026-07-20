@@ -73,23 +73,22 @@ For every recurring character, production design must lock and catalog:
 7. one exhaustive body topology: total limb count, every counted limb set, and
    counted defining appendages that must remain non-limbs.
 
-## Final-look portrait and anthropomorphic casting
+## Final-look portrait and natural species casting
 
 - Every individual character asset is a full-body final-look portrait. It must show
   the final costume and durable accessories; show a prop only when production design
   has selected it for current story, identity or continuity needs. A neutral
   wildlife image or unstyled identity plate is not a character asset, but a
   deliberately prop-free final-look portrait is valid.
-- Every character shows anthropomorphic inner life through an intentional eyeline,
+- Every character shows active inner life through an intentional eyeline,
   a motivated facial expression, active attention, and readable thought. Fixed
   smiles, empty stares and generic display poses are forbidden.
 - `lead`, `supporting`, and any other dialogue-owning individual are main story
-  characters. Each non-human main story character must stand upright on two legs
-  with an actor-ready bipedal body and expressive upper limbs, while retaining
-  unmistakable species head, surface, markings and defining anatomy.
-- Silent NPC group members remain anthropomorphically expressive. Their body plan
-  may stay closer to natural animal anatomy only when the screenplay has not made
-  them main story characters. Each member uses exactly one coherent
+  characters, but all non-humans retain natural species anatomy and locomotion.
+  Quadrupeds stay on four legs, insects retain natural legs and wings, and birds
+  retain two legs plus two wings. Never add a humanized torso, arms, hands, feet, or
+  upright bipedal stance to an animal.
+- Silent NPC group members follow the same natural-species rule. Each member uses exactly one coherent
   species-appropriate topology: a quadruped has four total limbs with no added
   arms/hands, a biped has two legs with no retained second hind-leg pair, and a bird
   has two legs plus two wings with no added arms, forelegs, or duplicate wings.

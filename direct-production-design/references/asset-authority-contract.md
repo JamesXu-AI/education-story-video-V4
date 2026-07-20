@@ -17,6 +17,23 @@ media inside the asset folder.
 input to this lifecycle. It is task-specific and precedes `assets.json`; it is not an
 approval, candidate, cache, or compatibility record. Generic generation code may
 read this plan but may not contain branches for particular story names or objects.
+The plan must bind `character_background_location_id` to one current model-authored
+location. Use that location's task-authored design as the visible environment for
+every character, costume-state, and ensemble image. Character-class
+images must visibly retain that bound environment; never replace it with a plain,
+solid-color, studio, catalogue, cutout, empty, or transparent backdrop. The embedded
+background is presentation context only and never becomes a second environment
+authority.
+An individual character or costume-state image contains exactly one living subject:
+the bound character. Its forest environment must contain no other person, animal,
+insect, crowd, silhouette, reflection, or distant cameo. Ensemble images contain
+only their closed roster and no background population.
+
+The final location image is Scene-cast, never character-free or empty. Derive its
+`included_role_asset_ids` from every on-screen performance entity used anywhere in
+the bound Scene, generate the role assets first, then reference and visibly include
+every individual and complete ensemble exactly once. A location may bind multiple
+Scenes only when their exhaustive role-asset sets are identical.
 
 ## Role separation
 
@@ -24,7 +41,8 @@ read this plan but may not contain branches for particular story names or object
   entities only;
 - costume plates define one character appearance state;
 - prop images define object appearance and state;
-- location masters define stable environment geometry and fixed props;
+- Scene-cast location masters define stable environment geometry, fixed props, and
+  the exhaustive visible role set of their bound Scene;
 - ensemble plates are one group portrait per explicit non-speaking cinematic role,
   may mix only the exact ordered `allowed_member_types_en` sharing that role, and
   exclude every unlisted species/type, every dialogue-owning character, and every
@@ -59,13 +77,17 @@ When a fixed plot prop has an independent asset, its location master must be
 generated after that prop and must use the prop image as an ordered direct reference.
 The location may place the object but may not redesign its geometry or silhouette.
 
-Generate with the repository-local Seedream wrapper. `assets.json` is written before
+Generate every visual asset at the repository-local Seedream 5.0 Pro endpoint's
+maximum supported 16:9 production size, currently the explicit `2816x1584` request,
+through the repository-local Seedream wrapper. Do not send the unsupported `4K`
+preset name to this endpoint. `assets.json` is written before
 generation and updated as each asset finishes. The final media, brief, compiled
 prompt, provider request and provider response stay together in that asset's own
 folder. Do not create a candidate, attempt, approval, or pending asset tree.
 Structurally verify the returned image and register it directly. If inspection or
 the independent reviewer finds a problem, regenerate and replace the affected
-current image; do not create an approval chain.
+current image; do not create an approval chain. Visual regeneration must preserve
+the current character voice unless `--regenerate-voice` is separately requested.
 
 A downstream Prompt/real-input compatibility failure is also an inspection
 failure. Repair the task-semantic plan when the exact state asset is missing, or

@@ -19,6 +19,10 @@ except ImportError:  # Direct script execution keeps providers/ on sys.path.
 
 SEEDREAM_ENV = ("ARK_BASE_URL", "SEEDREAM_API_KEY", "SEEDREAM_MODEL")
 SEEDREAM_MODEL_ID = "dola-seedream-5-0-pro-260628"
+# Seedream 5.0 Pro's ModelArk endpoint accepts only the 1K/2K preset names.
+# Use an explicit 16:9 size near the documented 4,624,220-pixel ceiling for
+# maximum-resolution production assets.
+SEEDREAM_MAX_IMAGE_SIZE = "2816x1584"
 
 
 def seedream_task_image_size(video_resolution: str) -> str:
@@ -198,7 +202,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument(
         "--image", action="append", default=[], help="Reference URL, data URI, asset URI, or file"
     )
-    generate.add_argument("--size", default="2K")
+    generate.add_argument("--size", default=SEEDREAM_MAX_IMAGE_SIZE)
     generate.add_argument("--output-format", choices=("png", "jpeg"), default="png")
     generate.add_argument("--response-format", choices=("url", "b64_json"), default="url")
     generate.add_argument("--max-images", type=int, choices=range(1, 16), metavar="1..15")

@@ -64,6 +64,7 @@ COSTUME_ASSET_KEYS = COMMON_ASSET_KEYS | {
 }
 LOCATION_MASTER_ASSET_KEYS = COMMON_ASSET_KEYS | {
     "included_prop_ids",
+    "included_role_asset_ids",
     "authority",
 }
 SOUND_ASSET_KEYS = frozenset(
@@ -108,7 +109,7 @@ ROSTER_AUTHORITY = "silent_cinematic_role_group_portrait"
 VOICE_KEYS = frozenset({"description_en", "reference"})
 AUDIO_REFERENCE_KEYS = frozenset({"path", "uri"})
 COSTUME_AUTHORITY = "character_costume_and_appearance_state"
-LOCATION_MASTER_AUTHORITY = "location_master_with_current_props"
+LOCATION_MASTER_AUTHORITY = "scene_cast_location_with_current_props_and_roles"
 SOUND_AUTHORITY = "current_sound_reference"
 SOUND_ROLES = frozenset(
     {"ambience", "foley", "sound_effect", "diegetic_music"}
@@ -827,6 +828,17 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
                 raise StoryVideoError(
                     f"location_master {asset_id} included_prop_ids must be a unique string array."
                 )
+            included_role_asset_ids = value["included_role_asset_ids"]
+            if (
+                not isinstance(included_role_asset_ids, list)
+                or not included_role_asset_ids
+                or any(not isinstance(item, str) for item in included_role_asset_ids)
+                or len(included_role_asset_ids) != len(set(included_role_asset_ids))
+            ):
+                raise StoryVideoError(
+                    f"location_master {asset_id} included_role_asset_ids must be a "
+                    "non-empty unique string array."
+                )
             if value["authority"] != LOCATION_MASTER_AUTHORITY:
                 raise StoryVideoError(
                     f"location_master {asset_id} authority must be {LOCATION_MASTER_AUTHORITY}."
@@ -834,6 +846,7 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
             normalized.update(
                 {
                     "included_prop_ids": list(included_prop_ids),
+                    "included_role_asset_ids": list(included_role_asset_ids),
                     "authority": LOCATION_MASTER_AUTHORITY,
                 }
             )
@@ -881,6 +894,16 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
                 if not prop or prop.get("type") != "prop":
                     raise StoryVideoError(
                         f"location_master {asset_id} included_prop_ids contains non-prop {prop_id!r}."
+                    )
+            for role_asset_id in asset["included_role_asset_ids"]:
+                role_asset = assets.get(role_asset_id)
+                if not role_asset or role_asset.get("type") not in {
+                    "character",
+                    "ensemble_roster",
+                }:
+                    raise StoryVideoError(
+                        f"location_master {asset_id} included_role_asset_ids contains "
+                        f"non-role asset {role_asset_id!r}."
                     )
         elif asset_type == "sound" and asset["owner_character_id"] != "none":
             owner = assets.get(asset["owner_character_id"])

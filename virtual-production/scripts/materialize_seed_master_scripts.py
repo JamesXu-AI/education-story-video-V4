@@ -57,7 +57,7 @@ def _validate_trace(task_dir: Path) -> dict[str, Any]:
     manifest_hash = sha256_file(task_dir / COMPILE_MANIFEST_RELATIVE)
     semantic = trace.get("semantic_review")
     if (
-        trace.get("schema_version") != "1.0"
+        trace.get("schema_version") != "1.2"
         or trace.get("storyboard_sha256") != storyboard_hash
         or trace.get("source_manifest_sha256") != manifest_hash
         or not isinstance(semantic, dict)

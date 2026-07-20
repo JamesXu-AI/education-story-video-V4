@@ -1,4 +1,4 @@
 interface:
   display_name: "Education Story Video V4"
-  short_description: "Orchestrate educational story-video production end to end"
-  default_prompt: "Use $education-story-video-v4 to run Route A and Route B, require every final Prompt binding to match assets.json semantics, route asset mismatches back to production design, and continue through verified final masters."
+  short_description: "Orchestrate cinematic story video with hard continuity gates"
+  default_prompt: "Use $education-story-video-v4 to run Route A and Route B. Require adjacent same-Scene Segments to be directly serial through either soft provider-last-frame reference-image continuity for settled motivated cuts or complete predecessor-video reference for unfinished phases; never compile the soft mode as strict/API first-frame control or allow a matched-tail third mode. Require every final Prompt binding to match assets.json semantics, route asset mismatches back to production design, and continue through verified final masters."

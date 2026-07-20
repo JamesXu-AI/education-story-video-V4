@@ -44,6 +44,7 @@ class NoSceneBackgroundContractTests(unittest.TestCase):
                     {
                         "location_id": "location-001",
                         "scene_ids": ["scene-001"],
+                        "scene_role_asset_ids": ["role-a", "role-b"],
                         "environment_state_en": "Stable room.",
                         "lighting_state_en": "Stable daylight.",
                         "palette_materials_en": "Warm matte plaster.",
@@ -60,9 +61,10 @@ class NoSceneBackgroundContractTests(unittest.TestCase):
         )
         self.assertEqual(
             authority["reference_mode"],
-            "location_master_image_with_topology_text",
+            "scene_cast_location_master_image_with_topology_text",
         )
         self.assertEqual(authority["location_master_asset_id"], "location-001")
+        self.assertEqual(authority["scene_role_asset_ids"], ["role-a", "role-b"])
         self.assertNotIn("selected_view_ids", authority)
         self.assertNotIn("screen_geography", authority)
 

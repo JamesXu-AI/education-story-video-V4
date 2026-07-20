@@ -9,7 +9,14 @@ from typing import Any
 
 
 PLAN_RELATIVE_PATH = Path("direct-production-design/production-design-plan.json")
-ROOT_KEYS = {"contract", "characters", "props", "costumes", "locations"}
+ROOT_KEYS = {
+    "contract",
+    "character_background_location_id",
+    "characters",
+    "props",
+    "costumes",
+    "locations",
+}
 CHARACTER_KEYS = {
     "entity_id",
     "design_description_en",
@@ -366,8 +373,20 @@ def load_production_design_plan(
             f"expected={expected_scene_ids}, actual={covered_scene_ids}"
         )
 
+    character_background_location_id = _text(
+        plan["character_background_location_id"],
+        "production-design plan.character_background_location_id",
+    )
+    if character_background_location_id not in location_ids:
+        raise ProductionDesignPlanError(
+            "character_background_location_id must reference a current location; "
+            f"received={character_background_location_id!r}, "
+            f"available={sorted(location_ids)}"
+        )
+
     return {
         "contract": "production-design-plan",
+        "character_background_location_id": character_background_location_id,
         "characters": characters,
         "props": props,
         "costumes": costumes,

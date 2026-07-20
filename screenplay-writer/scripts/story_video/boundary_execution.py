@@ -74,14 +74,39 @@ def classify_boundary(
     transition_type: str,
     from_scene_id: str,
     to_scene_id: str,
-    successor_continuity_mode: str = "editorial_cut",
+    successor_incoming_visual_requirement: str | None = None,
 ) -> str:
     """Return the semantic boundary class without inspecting generated media."""
 
-    if successor_continuity_mode == "continuous_action":
+    incoming_visual_requirement = successor_incoming_visual_requirement
+    if incoming_visual_requirement is None:
+        raise BoundaryExecutionError(
+            "incoming_visual_requirement must be authored explicitly; boundary "
+            "execution cannot default to independence"
+        )
+    if incoming_visual_requirement not in {
+        "independent",
+        "state_match",
+        "continuous_motion",
+    }:
+        raise BoundaryExecutionError(
+            f"Unsupported incoming visual requirement: {incoming_visual_requirement}"
+        )
+    same_scene = from_scene_id == to_scene_id
+    if same_scene and incoming_visual_requirement == "independent":
+        raise BoundaryExecutionError(
+            "same-Scene Segment boundaries must be serial: use state_match for "
+            "first-frame reference or continuous_motion for predecessor-video reference"
+        )
+
+    if incoming_visual_requirement == "continuous_motion":
+        if not same_scene:
+            raise BoundaryExecutionError(
+                "continuous_motion cannot cross a Scene boundary"
+            )
         if transition_type not in EDITORIAL_CUT_TYPES:
             raise BoundaryExecutionError(
-                "continuous_action requires a cut-like authored transition"
+                "continuous_motion requires a cut-like authored transition"
             )
         return "continuous_action"
     if transition_type in DESIGNED_TRANSITION_TYPES:
@@ -98,37 +123,55 @@ def build_boundary_execution(
     transition_design: dict[str, Any],
     from_scene_id: str,
     to_scene_id: str,
-    successor_continuity_mode: str = "editorial_cut",
+    successor_incoming_visual_requirement: str | None = None,
 ) -> dict[str, Any]:
     """Project one authored boundary into generation, finishing, and review rules."""
 
     transition_type = str(transition_design.get("type") or "")
+    incoming_visual_requirement = successor_incoming_visual_requirement
+    if incoming_visual_requirement is None:
+        raise BoundaryExecutionError(
+            "incoming_visual_requirement must be authored explicitly; boundary "
+            "execution cannot default to independence"
+        )
     transition_class = classify_boundary(
         transition_type=transition_type,
         from_scene_id=from_scene_id,
         to_scene_id=to_scene_id,
-        successor_continuity_mode=successor_continuity_mode,
+        successor_incoming_visual_requirement=incoming_visual_requirement,
     )
     duration = DEFAULT_TRANSITION_SECONDS.get(transition_type, 0.0)
 
     if transition_class == "continuous_action":
         visual_dependency = "screenplay_continuous_motion_requirement"
-        picture_edit = "cinematography_selected_reference_or_cut"
+        # The predecessor-video reference controls how the successor is generated;
+        # it is not a separate postproduction edit mode.  The generated successor
+        # clip starts at the authored continuation point, so finishing joins the
+        # two accepted clips with an ordinary zero-overlap cut.
+        picture_edit = "hard_cut"
         audio_edit = "native_clean_cut"
-        media_dependency = "storyboard_decides"
+        media_dependency = "predecessor_video"
+        continuation_reference_mode = "predecessor_video_reference"
+        reference_authority = "approved_complete_direct_predecessor_video"
     elif transition_class == "motivated_cut":
         visual_dependency = "same_scene_location_master_context"
         picture_edit = "hard_cut"
         audio_edit = "native_continuity_declick"
-        media_dependency = "none"
+        media_dependency = "predecessor_provider_last_frame_reference_image"
+        continuation_reference_mode = "first_frame_reference"
+        reference_authority = "soft_reference_image_not_strict_first_frame"
     elif transition_class == "scene_change":
         visual_dependency = "new_scene_location_master_context"
         picture_edit = "hard_cut"
         audio_edit = "native_clean_cut"
         media_dependency = "none"
+        continuation_reference_mode = "none"
+        reference_authority = "none"
     else:
         visual_dependency = "clip_local_transition_handle"
         media_dependency = "none"
+        continuation_reference_mode = "none"
+        reference_authority = "none"
         if transition_type == "dissolve":
             picture_edit = "dissolve"
             audio_edit = "equal_power_acrossfade"
@@ -139,12 +182,26 @@ def build_boundary_execution(
             picture_edit = "baked_effect"
             audio_edit = "native_clean_cut"
 
+    if incoming_visual_requirement == "state_match":
+        visual_dependency = "screenplay_state_match_requirement"
+        if from_scene_id == to_scene_id:
+            media_dependency = "predecessor_provider_last_frame_reference_image"
+            continuation_reference_mode = "first_frame_reference"
+            reference_authority = "soft_reference_image_not_strict_first_frame"
+        else:
+            media_dependency = "storyboard_decides_nonadjacent_state_authority"
+            continuation_reference_mode = "state_reference"
+            reference_authority = "declared_earlier_scene_state"
+
     return {
-        "schema_version": "boundary-execution/v1",
+        "schema_version": "boundary-execution/v2",
         "authored_transition_type": transition_type,
         "transition_class": transition_class,
+        "incoming_visual_requirement": incoming_visual_requirement,
         "visual_dependency_mode": visual_dependency,
         "media_dependency": media_dependency,
+        "continuation_reference_mode": continuation_reference_mode,
+        "reference_authority": reference_authority,
         "picture_edit_mode": picture_edit,
         "audio_edit_mode": audio_edit,
         "transition_duration_seconds": duration,
@@ -175,7 +232,9 @@ def incoming_boundary_mode(
         transition_design=predecessor["transition_design_json"],
         from_scene_id=predecessor["scene_id"],
         to_scene_id=current["scene_id"],
-        successor_continuity_mode=current["continuity_mode"],
+        successor_incoming_visual_requirement=current[
+            "incoming_visual_requirement"
+        ],
     )["transition_class"]
 
 
@@ -197,7 +256,9 @@ def build_story_plan_boundaries(
                     transition_design=predecessor["transition_design_json"],
                     from_scene_id=predecessor["scene_id"],
                     to_scene_id=current["scene_id"],
-                    successor_continuity_mode=current["continuity_mode"],
+                    successor_incoming_visual_requirement=current[
+                        "incoming_visual_requirement"
+                    ],
                 ),
                 "native_audio_dependency": "none",
             }

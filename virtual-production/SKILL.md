@@ -40,6 +40,24 @@ and may contain multiple ordered internal Shots. Preserve literal
 Require Seed Master to run its own `validate_segment_prompt.py` and
 `validate_storyboard_prompt_translation.py` gates before handing Route B back.
 
+Every returned Prompt must contain one scene-specific
+`### 1.5 [CINEMATIC DIRECTION]` section and exactly one
+full internal `cinematic_shot_contract` for each ordered Shot. The selected direction names all
+owned Shot IDs and applies only relevant anti-stage rules; it may not be a pasted
+generic paragraph. Each Shot contract must copy the complete approved Storyboard
+record and its concise exact provider-core `staging_implementation` must occur once in Direction. Missing,
+misordered, or unbound cinematic contracts block materialization. Virtual
+production never repairs a theatrical Scene or Shot locally: missing action returns
+to Screenplay, false spatial focus/camera motive returns to Route A, and only clear
+provider wording returns to Route B.
+
+The persisted Seed Master Script retains source-coverage, Line, and cinematic Shot
+contract rows for audit. After every validator and runtime binding check passes,
+materialization strips those redundant metadata sections from the actual provider
+text; their exact implementations remain in Generation setup or Shot Direction.
+This prevents the real Seedance Prompt from becoming a duplicated schema wall while
+preserving proof that no approved fact was omitted.
+
 For every active `reference_image` bound to a character or a character-owned
 costume/appearance state, require the final provider Prompt to contain exactly one
 canonical line using the current catalog values:
@@ -147,15 +165,27 @@ python3 virtual-production/scripts/generate_segment_videos.py \
 ```
 
 - `parallel`: compile/materialize all ready wave members and generate them with
-  bounded concurrency.
+  bounded concurrency, but only when adjacent manifest `scene_ids` do not overlap.
 - `serial_after_predecessor_review`: wait for the exact predecessor provider
   attempt, call repository-local `seedance-video-review`, and proceed only after it
   returns `NO_ISSUES`. Invoke Seed Master again with that observed attempt; require
   `shooting_plan_status: observed_adapted`; then materialize and generate.
 - `video_extension`: bind the complete predecessor video with audio preserved.
-- matched cut: bind exactly the predecessor's final 2.0 seconds with all audio
-  removed plus its provider-returned last frame.
-- last-frame-only dependency: bind only the provider-returned last frame.
+- soft first-frame reference: for a settled motivated same-Scene cut, use
+  `multimodal_reference` and bind only the provider-returned last frame as an
+  ordinary `reference_image`; do not set `strict_first_frame` and do not promise
+  identical opening pixels.
+- predecessor-video reference: for unfinished same-Scene action, performance,
+  blocking/facing/eyeline, entrance/contact, or camera motion, bind the complete
+  predecessor video with audio preserved through `video_extension`.
+- matched cut: only across an authored Scene/time/state discontinuity, bind exactly
+  the predecessor's final 2.0 seconds with all audio removed plus its
+  provider-returned last frame; it is not a third same-Scene mode.
+
+Before materialization or provider submission, runtime compares every adjacent
+manifest pair. Overlapping `scene_ids` must directly depend on the predecessor and
+match exactly one of the two same-Scene contracts above. Parallel, matched-tail, or
+strict-first-frame substitutions are hard failures.
 
 Runtime media must match the exact predecessor attempt frozen in the execution
 plan. No dependent Prompt, preflight, media upload, or Seedance call may precede
