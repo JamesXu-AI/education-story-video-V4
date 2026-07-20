@@ -28,7 +28,7 @@ class AssetReworkTests(unittest.TestCase):
         asset_id: str = "subject-a",
     ) -> tuple[Path, Path, dict[str, object]]:
         output = Path(
-            f"direct-production-design/assets/characters/{asset_id}/identity.png"
+            f"assets/characters/{asset_id}/identity.png"
         )
         media = root / output
         media.parent.mkdir(parents=True)
@@ -36,7 +36,7 @@ class AssetReworkTests(unittest.TestCase):
         (media.parent / "identity.brief.txt").write_text(
             old_prompt.rstrip() + "\n", encoding="utf-8"
         )
-        catalog_path = root / "direct-production-design/assets.json"
+        catalog_path = root / "assets/assets.json"
         catalog_path.parent.mkdir(parents=True, exist_ok=True)
         catalog_path.write_text(
             json.dumps(
@@ -70,7 +70,7 @@ class AssetReworkTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             output = Path(
-                "direct-production-design/assets/costumes/lion-defeated/image.png"
+                "assets/costumes/lion-defeated/image.png"
             )
             media = root / output
             media.parent.mkdir(parents=True)
@@ -79,7 +79,8 @@ class AssetReworkTests(unittest.TestCase):
             (media.parent / "image.brief.txt").write_text(
                 prompt + "\n", encoding="utf-8"
             )
-            catalog_path = root / "direct-production-design/assets.json"
+            catalog_path = root / "assets/assets.json"
+            catalog_path.parent.mkdir(parents=True, exist_ok=True)
             catalog_path.write_text(
                 json.dumps(
                     {

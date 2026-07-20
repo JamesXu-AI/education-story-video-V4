@@ -120,14 +120,13 @@ def classify_boundary(
 
 def build_boundary_execution(
     *,
-    transition_design: dict[str, Any],
+    transition_type: str,
     from_scene_id: str,
     to_scene_id: str,
     successor_incoming_visual_requirement: str | None = None,
 ) -> dict[str, Any]:
     """Project one authored boundary into generation, finishing, and review rules."""
 
-    transition_type = str(transition_design.get("type") or "")
     incoming_visual_requirement = successor_incoming_visual_requirement
     if incoming_visual_requirement is None:
         raise BoundaryExecutionError(
@@ -218,9 +217,11 @@ def build_boundary_execution(
 
 
 def incoming_boundary_mode(
-    story_plans: list[dict[str, Any]], segment_index: int
+    story_plans: list[dict[str, Any]],
+    authored_boundaries: list[dict[str, Any]],
+    segment_index: int,
 ) -> str:
-    """Derive one Segment's incoming semantic boundary directly from screenplay plans."""
+    """Read one Segment's incoming mode from its authored screenplay boundary."""
 
     if not 0 <= segment_index < len(story_plans):
         raise BoundaryExecutionError("Segment index is outside screenplay coverage")
@@ -228,37 +229,47 @@ def incoming_boundary_mode(
         return "opening"
     predecessor = story_plans[segment_index - 1]
     current = story_plans[segment_index]
+    boundary = authored_boundaries[segment_index - 1]
     return build_boundary_execution(
-        transition_design=predecessor["transition_design_json"],
+        transition_type=boundary["transition_type"],
         from_scene_id=predecessor["scene_id"],
         to_scene_id=current["scene_id"],
-        successor_incoming_visual_requirement=current[
-            "incoming_visual_requirement"
-        ],
+        successor_incoming_visual_requirement=boundary["handoff"],
     )["transition_class"]
 
 
 def build_story_plan_boundaries(
     story_plans: list[dict[str, Any]],
+    authored_boundaries: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Derive ordered executable boundaries without creating an intermediate file."""
+    """Compile authored boundaries without creating screenplay content."""
 
+    if len(authored_boundaries) != max(0, len(story_plans) - 1):
+        raise BoundaryExecutionError(
+            "Authored boundary coverage differs from Segment adjacency"
+        )
     boundaries: list[dict[str, Any]] = []
     for index in range(1, len(story_plans)):
         predecessor = story_plans[index - 1]
         current = story_plans[index]
+        authored = authored_boundaries[index - 1]
+        if (
+            authored.get("from_segment_id") != predecessor["segment_id"]
+            or authored.get("to_segment_id") != current["segment_id"]
+        ):
+            raise BoundaryExecutionError(
+                "Authored boundary does not match adjacent Segment IDs"
+            )
         boundaries.append(
             {
                 "from": predecessor["segment_id"],
                 "to": current["segment_id"],
-                "transition_design": predecessor["transition_design_json"],
+                "transition_design": authored,
                 "execution": build_boundary_execution(
-                    transition_design=predecessor["transition_design_json"],
+                    transition_type=authored["transition_type"],
                     from_scene_id=predecessor["scene_id"],
                     to_scene_id=current["scene_id"],
-                    successor_incoming_visual_requirement=current[
-                        "incoming_visual_requirement"
-                    ],
+                    successor_incoming_visual_requirement=authored["handoff"],
                 ),
                 "native_audio_dependency": "none",
             }

@@ -23,13 +23,13 @@ timeout. Never call another image Skill.
 Asset planning starts only after
 `screenplay-writer/scripts/validate_role_asset_scope.py` returns `status: PASS` and
 `image_asset_generation: UNLOCKED`. Read `task.json`, `story.md`, the current
-screenplay package, the current Storyboard when present, and the
+`screenplay-writer/screenplay.md`, the current Storyboard when present, and the
 [Soft & Cute 3D Healing Animation Visual Standard](references/soft-cute-3d-healing-visual-standard.md).
 When
 `direct-production-design/aesthetic-reference/manifest.json` exists inside the
 current task, also read its complete study and validated frame bindings before
 authoring the visual bible or any image request. The task story, cultural locks,
-screenplay, performance map and current approved asset authorities always outrank
+screenplay, its Performance Entity/Call tables, and current approved asset authorities always outrank
 that aesthetic evidence.
 
 The source video, selected source frames and contact sheets are offline analysis
@@ -42,7 +42,7 @@ Production design owns appearance and environment design, but cannot change stor
 presence, dialogue, action, camera, light, or Segment boundaries.
 
 Understand the screenplay and current Storyboard before deciding the complete asset
-set. Write `direct-production-design/assets.json` before the first provider call,
+set. Write repository-root `assets/assets.json` before the first provider call,
 then update each asset record from `planned` to `ready` or `failed` as execution
 finishes. Every asset entry script re-evaluates the fast role gate before any
 external image call.
@@ -64,7 +64,8 @@ Maintain:
 - the task-local aesthetic-reference manifest and study when an aesthetic source
   is supplied;
 - the model-authored task-semantic `production-design-plan.json`;
-- the single plan/catalog `assets.json` and the single media root `assets/`;
+- the repository-owned single plan/catalog `assets/assets.json` and media root
+  `assets/`; neither may live under a task directory;
 - one full-body final-look character portrait and one unique speaker voice WAV/URI
   for every dialogue-owning entity; a portrait includes a prop/accessory only when
   production design determines that the current story, identity or continuity
@@ -111,7 +112,7 @@ the character folder. Different sample texts are expected to produce different t
 durations.
 
 Before running the deterministic builder, the active production-design model must
-read the current `story.md`, screenplay, performance map, and aesthetic translation,
+read the current `story.md`, screenplay and its performance tables, and aesthetic translation,
 then author `direct-production-design/production-design-plan.json`. This is the only
 task-specific design authority for dialogue-character appearance, independently
 useful props, voice direction/sample/rate, appearance states, locations, topology,
@@ -273,7 +274,8 @@ approved repair.
 
 All asset types follow the same storage rule: one asset folder contains all of that
 asset's images, audio/video when applicable, briefs, prompts, requests and responses.
-`assets.json` is the only asset inventory and status authority.
+`assets.json` is the final reusable asset inventory. Builder lifecycle status is
+transient and must not remain in the final catalog.
 
 Expression, thought, and optional portrait props remain generation and visual-review
 requirements. Body topology is different: it is a required asset-contract field

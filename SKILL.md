@@ -69,7 +69,7 @@ or hard-coded story/species/object rules for this decision. Pass every direct Co
 decision explicitly to the builder; unresolved candidates must stop before any
 visual generation or overwrite.
 Before Seedance materialization, compare every final Prompt/provider binding with
-the semantic authority declared in `direct-production-design/assets.json`. Treat a
+the semantic authority declared in repository-root `assets/assets.json`. Treat a
 wrong identity, role, appearance/injury state, costume, group, prop, location or
 voice declaration as a blocker, route it to production design, and invalidate its
 Prompt compatibility receipt and affected execution plans. Do not download assets
@@ -89,21 +89,15 @@ the active task; never turn review into a separate approval-file workflow.
    must provide goals, obstacles, visible/audible triggers, actions, reactions,
    differentiated ensemble behavior, causal turns, and changed results without
    choosing cameras.
-2. Execute `screenplay-writer`. Build and check the screenplay package, then run
-   the fast role/asset-scope gate. Do not proceed unless every Scene has its current
-   cinematic dramatic contract and passed semantic Screenplay Gate, every Dramatic
-   Beat has one visual focus and complete block coverage, dialogue is embedded in
-   action/reaction, and the Scene changes visual/spatial state. A failure returns to
-   Screenplay; no downstream camera or Prompt patch may disguise it. Every retained
-   adjacent same-Scene Segment boundary must already be classified for serial soft
-   first-frame reference after a settled motivated cut, or serial predecessor-video
-   reference for an unfinished action/performance/blocking/camera phase. Same-Scene
-   `independent` is a screenplay failure.
-3. The screenplay collaboration must directly complete its generatability, action
-   density, dialogue occupancy, closure, continuity, merge, and waiting audit before
-   the fast role/asset-scope gate. After that gate returns `PASS` with image
-   generation unlocked, start `direct-production-design`; do not launch a separate
-   Codex screenplay reviewer.
+2. Execute `screenplay-writer`. Build and check its single all-table,
+   cinematic-widescreen `screenplay.md` release, then run every check defined by
+   that department. Its Prompt owns creative decisions and its production-script
+   contract owns syntax; do not restate, weaken, or supplement either here. Any
+   structural, semantic, staging, timing, dialogue, sound, or continuity failure
+   returns to Screenplay. Downstream departments may not repair it indirectly.
+3. After the role/asset-scope gate returns `PASS` with image generation unlocked,
+   start `direct-production-design`; do not launch a separate Codex screenplay
+   reviewer.
    Before production-design generation, run `build_initial_production_design.py
    --inspect-semantic-reuse`. For every returned candidate, Codex directly decides
    whether the old and current visual meanings are equivalent by applying
@@ -113,7 +107,7 @@ the active task; never turn review into a separate approval-file workflow.
    `--codex-regenerate-visual-asset ASSET_ID` for each materially changed candidate.
    The visual-only decision must preserve a current character voice. This review is
    part of the active Codex task and is never delegated to a provider model.
-4. Require the current deterministic screenplay package, fast role-gate PASS, and
+4. Require the current deterministic `screenplay.md`, fast role-gate PASS, and
    current valid production-design authorities before executing
    `previsualize-cinematography`.
    Pass the original request and complete upstream inputs to that shell. It invokes
@@ -121,10 +115,10 @@ the active task; never turn review into a separate approval-file workflow.
    returned `storyboard.md` and `storyboard-compile-manifest.json` bytes verbatim at
    `TASK_DIR/previsualize-cinematography/`; do not add a local schema, converted
    companion, wrapper, or acceptance layer. `storyboard.data.json` does not exist
-   and is forbidden throughout the repository. Route A must return any missing
-   action/spatial/visual focus to Screenplay; it must convert approved Dramatic
-   Beats into one-task Shots with motivated camera, layered blocking, selective
-   ensemble control, and passed five-question cinematic reviews. Route A must make
+   and is forbidden throughout the repository. Route A must return missing or
+   contradictory screenplay authority to its owner, then convert accepted
+   story-facing Shot rows into final one-task Shots with motivated camera, layered
+   blocking, selective ensemble control, and passed cinematic reviews. Route A must make
    every overlapping `scene_ids` pair directly serial: `multimodal_reference` plus
    provider-last-frame soft reference image for settled cuts, or complete-predecessor
    `video_extension` for unfinished phases. Soft reference is not strict/API
@@ -160,23 +154,6 @@ the active task; never turn review into a separate approval-file workflow.
 8. Execute `finish-postproduction` after every current Segment has one valid
    audiovisual result and production record. Deliver clean and captioned masters,
    exact subtitle files, and the final delivery manifest.
-
-## Current-contract-only rule
-
-Every department artifact handed downstream must use the latest contract currently
-defined by its owning department. When an existing task contains a complete but
-older artifact, perform a one-way in-place upgrade through the owning department's
-current publisher or writer before continuing. Verify that creative and execution
-data are unchanged except for required contract metadata, derived fingerprints,
-and newly required current-contract fields.
-
-Do not add legacy compatibility branches, fallback parsers, version aliases, gate
-exceptions, or downstream acceptance paths. Do not preserve shadow legacy copies
-or emit legacy-version compatibility records. The explicitly required current
-Prompt/`assets.json` semantic review and receipt are execution gates, not legacy
-compatibility shims. If an older artifact cannot be upgraded losslessly,
-regenerate that artifact with the current owning department instead of teaching
-current code to accept the older contract.
 
 ## Automatic postproduction handoff
 

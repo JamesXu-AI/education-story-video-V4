@@ -206,7 +206,6 @@ def build_video_payload(args: argparse.Namespace) -> dict[str, Any]:
         kind="image",
         role="reference_image",
         upload_local=args.upload_local,
-        presign_expires=args.presign_expires,
     )
     core.add_media_content(
         content,
@@ -214,7 +213,6 @@ def build_video_payload(args: argparse.Namespace) -> dict[str, Any]:
         kind="audio",
         role="reference_audio",
         upload_local=args.upload_local,
-        presign_expires=args.presign_expires,
     )
     core.add_media_content(
         content,
@@ -222,7 +220,6 @@ def build_video_payload(args: argparse.Namespace) -> dict[str, Any]:
         kind="video",
         role="reference_video",
         upload_local=args.upload_local,
-        presign_expires=args.presign_expires,
     )
     if not content:
         raise core.SeedMediaError("Video generation requires a prompt or input media")
@@ -359,7 +356,6 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--priority", type=int, choices=range(10), default=0)
     create.add_argument("--execution-expires-after", type=int, default=172800)
     create.add_argument("--upload-local", action=argparse.BooleanOptionalAction, default=True)
-    create.add_argument("--presign-expires", type=int, default=86400)
     create.add_argument("--extra-json", help="JSON object or @path merged into the request")
     create.add_argument("--wait", action="store_true")
     add_wait_arguments(create)

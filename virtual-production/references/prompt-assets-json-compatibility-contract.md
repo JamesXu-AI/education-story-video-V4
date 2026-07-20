@@ -5,13 +5,16 @@ test. Before publishing a Seedance execution plan, freeze the exact final Route 
 Prompt, every provider-token responsibility, the selected `assets.json` semantic
 row, and every owned Storyboard requirement in
 `.pending/virtual-production/asset-compatibility-review-packets/segment-NNN.json`.
+Catalog media URIs are persistent unsigned object URLs. TOS query signatures are
+temporary transport credentials and must not appear in the catalog or a handoff.
 
 For every static `@ImageN` or `@AudioN`, require the Prompt element namespace to
 equal the bound `assets.json` asset ID. Compare the Prompt responsibility and
 Storyboard requirements with the catalog's declared `asset_id`, `type`,
-`description_en`, character ownership, appearance/injury state, authority, group
-membership, allowed/excluded entities, prop bindings, performance, voice identity,
-and sound role. Do not download provider media or compare provider/local bytes in
+`description_en`, reusable character `actor_profile`, character ownership,
+appearance/injury state, closed group member types, prop bindings, body topology,
+voice identity, and sound role. Story objectives and shot-local performance never
+come from the reusable catalog. Do not download provider media or compare provider/local bytes in
 this gate. Hashes only bind the review to the exact Prompt and current catalog row
 so stale reviews cannot be reused.
 

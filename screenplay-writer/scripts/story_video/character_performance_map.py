@@ -1,8 +1,7 @@
-"""Build and validate the screenplay-owned Scene/Segment performance authority."""
+"""Derive and validate performance authority from the single screenplay.md source."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import re
 from typing import Any
@@ -11,7 +10,7 @@ from story_video.runtime_support import StoryVideoError
 from story_video.screenplay_contract import load_screenplay_file
 
 
-MAP_RELATIVE_PATH = Path("screenplay-writer/character-performance-map.json")
+MAP_RELATIVE_PATH = Path("screenplay-writer/screenplay.md")
 ROOT_KEYS = {
     "contract",
     "performance_entities",
@@ -21,11 +20,12 @@ ENTITY_KEYS = {
     "entity_id",
     "screenplay_character_name_en",
     "story_role",
-    "entity_label_en",
+    "narrative_function_en",
     "entity_kind",
     "recurring",
     "group_role_type_en",
     "ensemble_member_types_en",
+    "narration_eligibility",
     "description_en",
 }
 SEGMENT_KEYS = {
@@ -38,20 +38,17 @@ SEGMENT_KEYS = {
 CALL_KEYS = {
     "entity_id",
     "screenplay_character_name_en",
-    "entity_label_en",
     "entity_kind",
     "presence_mode",
     "speaks",
-    "dialogue_refs",
+    "line_ids",
     "state_changing_action",
     "recurring",
     "group_role_type_en",
-    "action_obligations_en",
+    "action_shot_ids",
 }
-DIALOGUE_REF_KEYS = {"block_index", "speaker_cue_en", "spoken_text_en"}
 ENTITY_KINDS = {"individual", "anonymous_ensemble"}
 PRESENCE_MODES = {"on_screen", "off_screen", "voice_over"}
-SPEAKER_MODE_RE = re.compile(r"\s+\((V\.O\.|O\.S\.)\)$", re.IGNORECASE)
 ASSET_SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
@@ -86,23 +83,10 @@ def _exact(value: Any, keys: set[str], label: str) -> dict[str, Any]:
     return value
 
 
-def _load_json(path: Path, label: str) -> dict[str, Any]:
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise StoryVideoError(f"Missing {label}: {path}") from exc
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise StoryVideoError(f"Invalid UTF-8 JSON {label}: {path}") from exc
-    if not isinstance(value, dict):
-        raise StoryVideoError(f"{label} must contain one JSON object")
-    return value
-
-
 def validate_character_performance_map(
     value: dict[str, Any],
     *,
     screenplay_path: Path,
-    audio_timeline_path: Path,
 ) -> dict[str, Any]:
     """Validate exact screenplay coverage and role-call integrity."""
 
@@ -111,9 +95,10 @@ def validate_character_performance_map(
         raise StoryVideoError("character-performance-map fixed fields are invalid")
 
     screenplay = load_screenplay_file(screenplay_path)
-    _load_json(audio_timeline_path, "audio-timeline.json")
 
-    characters = {item["name_en"]: item for item in screenplay["characters"]}
+    screenplay_entities = {
+        item["entity_id"]: item for item in screenplay["characters"]
+    }
     raw_entities = value["performance_entities"]
     if not isinstance(raw_entities, list) or not raw_entities:
         raise StoryVideoError("performance_entities must be non-empty")
@@ -123,8 +108,7 @@ def validate_character_performance_map(
         entity_id = entity["entity_id"]
         if not isinstance(entity_id, str) or not entity_id or entity_id in entities:
             raise StoryVideoError("performance entity IDs must be unique text")
-        character = characters.get(entity["screenplay_character_name_en"])
-        if character is None or entity["story_role"] != character["story_role"]:
+        if screenplay_entities.get(entity_id) != entity:
             raise StoryVideoError(f"{entity_id} differs from screenplay Character authority")
         if entity["entity_kind"] not in ENTITY_KINDS or not isinstance(
             entity["recurring"], bool
@@ -134,7 +118,6 @@ def validate_character_performance_map(
             raise StoryVideoError(f"{entity_id} anonymous ensemble cannot be recurring")
         for field in (
             "screenplay_character_name_en",
-            "entity_label_en",
             "group_role_type_en",
             "description_en",
         ):
@@ -180,7 +163,10 @@ def validate_character_performance_map(
             "scene_id": plan["scene_id"],
             "segment_id": plan["segment_id"],
             "duration_seconds": plan["estimated_duration_seconds"],
-            "screenplay_participants": plan["characters_json"],
+            "screenplay_participants": [
+                call["entity_id"]
+                for call in screenplay_segment["performance_calls"]
+            ],
         }
         for field, expected in expected_fixed.items():
             if segment[field] != expected:
@@ -190,7 +176,7 @@ def validate_character_performance_map(
             raise StoryVideoError(f"{plan['segment_id']} calls must be non-empty")
         called_ids: set[str] = set()
         represented_participants: set[str] = set()
-        referenced_dialogue_blocks: set[int] = set()
+        referenced_line_ids: set[str] = set()
         for call_index, raw_call in enumerate(calls, start=1):
             call = _exact(raw_call, CALL_KEYS, f"{plan['segment_id']} call {call_index}")
             entity = entities.get(call["entity_id"])
@@ -199,10 +185,9 @@ def validate_character_performance_map(
             called_ids.add(call["entity_id"])
             used_entities.add(call["entity_id"])
             called_segments_by_entity[call["entity_id"]].append(plan["segment_id"])
-            represented_participants.add(entity["screenplay_character_name_en"])
+            represented_participants.add(entity["entity_id"])
             for field in (
                 "screenplay_character_name_en",
-                "entity_label_en",
                 "entity_kind",
                 "recurring",
                 "group_role_type_en",
@@ -216,46 +201,15 @@ def validate_character_performance_map(
             for flag in ("speaks", "state_changing_action"):
                 if not isinstance(call[flag], bool):
                     raise StoryVideoError(f"{call['entity_id']} {flag} must be boolean")
-            obligations = call["action_obligations_en"]
-            if (
-                not isinstance(obligations, list)
-                or not obligations
-                or any(not isinstance(item, str) or not item.strip() for item in obligations)
-                or len(obligations) != len(set(obligations))
-            ):
-                raise StoryVideoError(f"{call['entity_id']} requires action obligations")
-            refs = call["dialogue_refs"]
-            if not isinstance(refs, list) or call["speaks"] != bool(refs):
-                raise StoryVideoError(f"{call['entity_id']} speech flag/refs differ")
-            for raw_ref in refs:
-                ref = _exact(raw_ref, DIALOGUE_REF_KEYS, "dialogue reference")
-                block_index = ref["block_index"]
-                if (
-                    isinstance(block_index, bool)
-                    or not isinstance(block_index, int)
-                    or block_index < 1
-                    or block_index > len(screenplay_segment["blocks"])
-                    or block_index in referenced_dialogue_blocks
-                ):
-                    raise StoryVideoError("dialogue block reference is invalid or repeated")
-                block = screenplay_segment["blocks"][block_index - 1]
-                if block.get("type") != "dialogue" or any(
-                    ref[field] != block[field]
-                    for field in ("speaker_cue_en", "spoken_text_en")
-                ):
-                    raise StoryVideoError("dialogue reference differs from screenplay block")
-                if block["speaker_en"] != call["screenplay_character_name_en"]:
-                    raise StoryVideoError("dialogue reference speaker differs from entity")
-                mode_match = SPEAKER_MODE_RE.search(ref["speaker_cue_en"])
-                required_presence = {
-                    "V.O.": "voice_over",
-                    "O.S.": "off_screen",
-                }.get(mode_match.group(1).upper() if mode_match else "", "on_screen")
-                if call["presence_mode"] != required_presence:
-                    raise StoryVideoError(
-                        "dialogue reference cue differs from performance presence mode"
-                    )
-                referenced_dialogue_blocks.add(block_index)
+            line_ids = call["line_ids"]
+            if not isinstance(line_ids, list) or call["speaks"] != bool(line_ids):
+                raise StoryVideoError(f"{call['entity_id']} speech flag/lines differ")
+            if any(line_id in referenced_line_ids for line_id in line_ids):
+                raise StoryVideoError("Dialogue Line ownership is repeated")
+            referenced_line_ids.update(line_ids)
+            action_shot_ids = call["action_shot_ids"]
+            if not isinstance(action_shot_ids, list):
+                raise StoryVideoError(f"{call['entity_id']} action_shot_ids must be a list")
             if call["entity_kind"] == "anonymous_ensemble" and (
                 call["presence_mode"] != "on_screen"
                 or call["speaks"]
@@ -264,14 +218,17 @@ def validate_character_performance_map(
                 raise StoryVideoError(
                     "anonymous ensemble may only own shared on-screen group performance"
                 )
-        if represented_participants != set(plan["characters_json"]):
+        if represented_participants != {
+            call["entity_id"]
+            for call in screenplay_segment["performance_calls"]
+        }:
             raise StoryVideoError(f"{plan['segment_id']} participant call coverage differs")
-        expected_dialogue_blocks = {
-            block_index
-            for block_index, block in enumerate(screenplay_segment["blocks"], start=1)
-            if block["type"] == "dialogue"
+        expected_line_ids = {
+            shot["dialogue"]["line_id"]
+            for shot in screenplay_segment["shots"]
+            if shot["dialogue"] is not None
         }
-        if referenced_dialogue_blocks != expected_dialogue_blocks:
+        if referenced_line_ids != expected_line_ids:
             raise StoryVideoError(f"{plan['segment_id']} dialogue call coverage differs")
         dialogue_character_ids = called_ids & speaking_entity_ids
         visible_dialogue_ids = {
@@ -309,16 +266,14 @@ def validate_character_performance_map(
             raise StoryVideoError(
                 f"{plan['segment_id']} exceeds six static reference images"
             )
-        dialogue_turn_count = sum(len(call["dialogue_refs"]) for call in calls)
+        dialogue_turn_count = sum(len(call["line_ids"]) for call in calls)
         if dialogue_turn_count > 3:
             raise StoryVideoError(
                 f"{plan['segment_id']} exceeds three dialogue turns"
             )
     if used_entities != set(entities):
         raise StoryVideoError("performance entity authority contains unused entities")
-    if {
-        entity["screenplay_character_name_en"] for entity in entities.values()
-    } != set(characters):
+    if set(entities) != set(screenplay_entities):
         raise StoryVideoError(
             "performance entities must cover every screenplay Character"
         )
@@ -371,7 +326,7 @@ def validate_character_performance_map(
             member_type_owner[key] = entity_id
     dialogue_asset_slugs: dict[str, str] = {}
     for entity_id in speaking_entity_ids:
-        label = entities[entity_id]["entity_label_en"]
+        label = entities[entity_id]["screenplay_character_name_en"]
         slug = ASSET_SLUG_RE.sub("-", label.casefold()).strip("-")
         if not slug or slug in dialogue_asset_slugs:
             owner = dialogue_asset_slugs.get(slug, "none")
@@ -471,7 +426,7 @@ def role_asset_scope_gate(task_dir: Path) -> dict[str, Any]:
                 "offscreen_or_voiceover_dialogue_entity_ids": nonvisible_dialogue_ids,
                 "silent_group_role_types": group_roles,
                 "dialogue_turn_count": sum(
-                    len(call["dialogue_refs"]) for call in calls
+                    len(call["line_ids"]) for call in calls
                 ),
                 "static_reference_image_count": 1
                 + len(dialogue_ids)
@@ -494,7 +449,6 @@ def role_asset_scope_gate(task_dir: Path) -> dict[str, Any]:
                 "character_name_en": entities[entity_id][
                     "screenplay_character_name_en"
                 ],
-                "entity_label_en": entities[entity_id]["entity_label_en"],
                 "entity_kind": entities[entity_id]["entity_kind"],
             }
             for entity_id in dialogue_entity_ids
@@ -530,11 +484,51 @@ def role_asset_scope_gate(task_dir: Path) -> dict[str, Any]:
 
 def load_character_performance_map(task_dir: Path) -> dict[str, Any]:
     task_dir = task_dir.expanduser().resolve()
-    path = task_dir / MAP_RELATIVE_PATH
-    value = _load_json(path, "character-performance-map.json")
+    path = task_dir / "screenplay-writer/screenplay.md"
+    screenplay = load_screenplay_file(path)
+    entities = {
+        item["entity_id"]: item for item in screenplay["characters"]
+    }
+    scene_segment_calls: list[dict[str, Any]] = []
+    for segment in screenplay["segments"]:
+        plan = segment["story_plan"]
+        calls: list[dict[str, Any]] = []
+        for compact in segment["performance_calls"]:
+            entity = entities[compact["entity_id"]]
+            calls.append(
+                {
+                    "entity_id": entity["entity_id"],
+                    "screenplay_character_name_en": entity[
+                        "screenplay_character_name_en"
+                    ],
+                    "entity_kind": entity["entity_kind"],
+                    "presence_mode": compact["presence_mode"],
+                    "speaks": compact["speaks"],
+                    "line_ids": compact["line_ids"],
+                    "state_changing_action": compact["state_changing_action"],
+                    "recurring": entity["recurring"],
+                    "group_role_type_en": entity["group_role_type_en"],
+                    "action_shot_ids": compact["action_block_ids"],
+                }
+            )
+        scene_segment_calls.append(
+            {
+                "scene_id": plan["scene_id"],
+                "segment_id": plan["segment_id"],
+                "duration_seconds": plan["estimated_duration_seconds"],
+                "screenplay_participants": [
+                    call["entity_id"] for call in segment["performance_calls"]
+                ],
+                "calls": calls,
+            }
+        )
+    value = {
+        "contract": "character-performance-map",
+        "performance_entities": screenplay["characters"],
+        "scene_segment_calls": scene_segment_calls,
+    }
     validate_character_performance_map(
         value,
-        screenplay_path=task_dir / "screenplay-writer/screenplay.md",
-        audio_timeline_path=task_dir / "screenplay-writer/audio-timeline.json",
+        screenplay_path=path,
     )
     return value

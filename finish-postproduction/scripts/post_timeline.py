@@ -132,7 +132,9 @@ def probe_media(path: Path) -> MediaProbe:
     )
 
 
-def _screenplay_story_plans(task_dir: Path) -> list[dict[str, Any]]:
+def _screenplay_story_plans(
+    task_dir: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     screenplay = load_screenplay_file(task_dir / "screenplay-writer" / "screenplay.md")
     story_plans = [segment["story_plan"] for segment in screenplay["segments"]]
     if not story_plans:
@@ -141,7 +143,7 @@ def _screenplay_story_plans(task_dir: Path) -> list[dict[str, Any]]:
     actual = [item["segment_id"] for item in story_plans]
     if actual != expected:
         raise TimelineError("screenplay.md Segment order is invalid")
-    return story_plans
+    return story_plans, screenplay["continuity_boundaries"]
 
 
 def _validate_task_audio(task_dir: Path) -> dict[str, Any]:
@@ -282,8 +284,9 @@ def compile_timelines(
     picture_events: list[dict[str, Any]] = []
     native_events: list[dict[str, Any]] = []
     boundaries: list[dict[str, Any]] = []
+    story_plans, authored_boundaries = _screenplay_story_plans(task_dir)
     plan_boundaries = build_story_plan_boundaries(
-        _screenplay_story_plans(task_dir)
+        story_plans, authored_boundaries
     )
     storyboards = load_route_b_handoff(task_dir)
     cursor = 0.0

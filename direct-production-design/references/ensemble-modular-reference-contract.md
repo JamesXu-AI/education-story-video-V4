@@ -17,7 +17,7 @@ pet analogue, hybrid, or decorative filler is permitted. For example, an authore
 tiger never authorizes a cat. The recorded `subject_count` must equal this compiled
 closed roster count.
 
-`screenplay-writer/character-performance-map.json` owns speech, performance
+`screenplay-writer/screenplay.md` Performance Entity and Performance Call tables own speech, performance
 granularity, narrative-role membership, and obligations. Production design derives
 one silent visual group per narrative role; each roster member in `assets.json` lists every
 non-speaking entity in that role to the same approved group portrait. A silent `individual`

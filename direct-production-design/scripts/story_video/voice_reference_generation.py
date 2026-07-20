@@ -16,6 +16,8 @@ import wave
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+ASSET_CATALOG_RELATIVE_PATH = Path("assets/assets.json")
+ASSET_MEDIA_RELATIVE_PATH = Path("assets")
 PROVIDER_PATH = (
     REPOSITORY_ROOT
     / "finish-postproduction"
@@ -348,15 +350,14 @@ def _provider_prompt(character: dict[str, Any], *, has_identity_reference: bool)
 
 def _generate_one(
     task_root: Path,
+    repository_root: Path,
     character: dict[str, Any],
     timeout: int,
     *,
     force_regenerate: bool,
 ) -> tuple[str, dict[str, Any]]:
     entity_id = character["entity_id"]
-    folder = (
-        task_root / "direct-production-design/assets/characters" / entity_id
-    )
+    folder = repository_root / ASSET_MEDIA_RELATIVE_PATH / "characters" / entity_id
     target = folder / "voice.wav"
     brief_path = folder / "voice.brief.json"
     request_path = folder / "voice.request.json"
@@ -379,7 +380,7 @@ def _generate_one(
         return entity_id, {
             "description_en": character["voice_description_en"],
             "reference": {
-                "path": target.relative_to(task_root).as_posix(),
+                "path": target.relative_to(repository_root).as_posix(),
                 "uri": existing_response["uri"],
             },
         }
@@ -394,7 +395,7 @@ def _generate_one(
         "provider": "seed-audio-1.0",
         "prompt": provider_prompt,
         "identity_reference": (
-            target.relative_to(task_root).as_posix()
+            target.relative_to(repository_root).as_posix()
             if identity_reference is not None
             else "none"
         ),
@@ -475,7 +476,7 @@ def _generate_one(
             )
 
     stored = seedaudio.core.tos_upload_path(target, kind="inputs/audio")
-    uri = seedaudio.core.tos_presign(stored["key"], expires=604800)
+    uri = stored["public_url"]
     response_record = {
         "contract": VOICE_RESPONSE_CONTRACT,
         "entity_id": entity_id,
@@ -486,14 +487,14 @@ def _generate_one(
         "time_scale_factor": 1.0,
         "accepted_generation_attempt": accepted_attempt,
         "word_timing": alignment,
-        "path": target.relative_to(task_root).as_posix(),
+        "path": target.relative_to(repository_root).as_posix(),
         "uri": uri,
     }
     _atomic_json(response_path, response_record)
     return entity_id, {
         "description_en": character["voice_description_en"],
         "reference": {
-            "path": target.relative_to(task_root).as_posix(),
+            "path": target.relative_to(repository_root).as_posix(),
             "uri": uri,
         },
     }
@@ -503,6 +504,7 @@ def ensure_voice_references(
     task_root: Path,
     characters: list[dict[str, Any]],
     *,
+    repository_root: Path = REPOSITORY_ROOT,
     timeout: int,
     max_workers: int,
     force_regenerate: set[str] | None = None,
@@ -520,6 +522,7 @@ def ensure_voice_references(
             executor.submit(
                 _generate_one,
                 task_root,
+                repository_root.expanduser().resolve(),
                 character,
                 timeout,
                 force_regenerate=character["entity_id"] in forced,
@@ -544,11 +547,14 @@ def ensure_voice_references(
 
 
 def publish_voice_references_to_catalog(
-    task_root: Path, voices: dict[str, dict[str, Any]]
+    task_root: Path,
+    voices: dict[str, dict[str, Any]],
+    *,
+    repository_root: Path = REPOSITORY_ROOT,
 ) -> None:
     """Replace character voice bindings in the current catalog atomically."""
 
-    catalog_path = task_root / "direct-production-design/assets.json"
+    catalog_path = repository_root.expanduser().resolve() / ASSET_CATALOG_RELATIVE_PATH
     catalog = _load_json(catalog_path)
     if not isinstance(catalog, dict) or catalog.get("contract") != "production-design-assets":
         raise VoiceReferenceGenerationError(

@@ -170,7 +170,6 @@ def command_generate(args: argparse.Namespace) -> dict[str, Any]:
                 item,
                 kind="image",
                 upload_local=args.upload_local,
-                presign_expires=args.presign_expires,
             )
             for item in args.image
         ]
@@ -208,7 +207,6 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--max-images", type=int, choices=range(1, 16), metavar="1..15")
     generate.add_argument("--watermark", action=argparse.BooleanOptionalAction, default=False)
     generate.add_argument("--upload-local", action="store_true", help="Upload local references to TOS")
-    generate.add_argument("--presign-expires", type=int, default=86400)
     generate.add_argument("--extra-json", help="JSON object or @path merged into the request")
     add_persistence_arguments(generate)
     generate.set_defaults(handler=command_generate)

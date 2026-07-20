@@ -23,13 +23,6 @@ from story_video.screenplay_contract import (  # noqa: E402
 from story_video.runtime_support import StoryVideoError  # noqa: E402
 
 
-def transition(kind: str = "action_cut") -> dict[str, str]:
-    return {
-        "type": kind,
-        "reason_en": "The cut preserves one accelerating reversal.",
-    }
-
-
 def cinematic_scene_contract() -> dict[str, object]:
     return {
         "scene_id": "scene-001",
@@ -44,62 +37,42 @@ def cinematic_scene_contract() -> dict[str, object]:
     }
 
 
-def cinematic_beat(block_indexes: list[int]) -> dict[str, object]:
+def cinematic_shot(action: str) -> dict[str, object]:
     return {
         "beat_id": "BEAT-001A",
-        "narrative_change": "Lion's command stops controlling the whole clearing.",
-        "active_character": "Elephant becomes the active resisting character.",
-        "physical_objective": "Elephant must keep Lion away from the retreat path.",
-        "visible_action": "Elephant crosses the path and lowers one forefoot.",
-        "important_reaction": "The nearest animals split toward cover instead of answering.",
-        "spatial_change": "The center closes while a side corridor opens.",
-        "dialogue_or_sound": "Lion's command is interrupted by feet scraping backward.",
-        "entry_state": "Lion owns the center and blocks every route.",
-        "exit_state": "Elephant owns the center and protects one route.",
-        "action_subject": "Elephant drives the blocking action in this beat.",
-        "reaction_subject": "Lion's arrested advance carries the key reaction.",
-        "supporting_group": "Nearby animals retreat in two uneven waves.",
-        "atmosphere_presence": "Hidden animals remain present through broken branches and breath.",
-        "visual_focus": "Elephant's crossing changes control of the path.",
-        "block_indexes": block_indexes,
+        "visual_action_en": action,
     }
 
 
 class BoundaryExecutionTests(unittest.TestCase):
     def test_cinematic_screenplay_gate_rejects_stage_tableau_input(self) -> None:
-        blocks = [
-            {
-                "type": "action",
-                "text_en": "All the animals stand in a semicircle before Lion while waiting to speak.",
-            }
-        ]
         with self.assertRaisesRegex(StoryVideoError, "stage-tableau"):
             validate_cinematic_segment_contract(
                 segment_id="segment-001",
                 scene_id="scene-001",
                 scene_contract=cinematic_scene_contract(),
-                dramatic_beats=[cinematic_beat([1])],
-                blocks=blocks,
+                shots=[
+                    cinematic_shot(
+                        "All the animals stand in a semicircle before Lion while waiting to speak."
+                    )
+                ],
             )
 
     def test_cinematic_screenplay_gate_accepts_action_led_ensemble(self) -> None:
-        blocks = [
-            {
-                "type": "action",
-                "text_en": "Elephant crosses the path as smaller animals retreat behind roots and brush.",
-            }
-        ]
         validate_cinematic_segment_contract(
             segment_id="segment-001",
             scene_id="scene-001",
             scene_contract=cinematic_scene_contract(),
-            dramatic_beats=[cinematic_beat([1])],
-            blocks=blocks,
+            shots=[
+                cinematic_shot(
+                    "Elephant crosses the path as smaller animals retreat behind roots and brush."
+                )
+            ],
         )
 
     def test_scene_change_can_be_independent(self) -> None:
         result = build_boundary_execution(
-            transition_design=transition(),
+            transition_type="action_cut",
             from_scene_id="scene-001",
             to_scene_id="scene-002",
             successor_incoming_visual_requirement="independent",
@@ -113,7 +86,7 @@ class BoundaryExecutionTests(unittest.TestCase):
     def test_same_scene_independent_is_rejected(self) -> None:
         with self.assertRaisesRegex(BoundaryExecutionError, "must be serial"):
             build_boundary_execution(
-                transition_design=transition("reaction_cut"),
+                transition_type="reaction_cut",
                 from_scene_id="scene-001",
                 to_scene_id="scene-001",
                 successor_incoming_visual_requirement="independent",
@@ -122,14 +95,14 @@ class BoundaryExecutionTests(unittest.TestCase):
     def test_missing_visual_requirement_cannot_default_to_independent(self) -> None:
         with self.assertRaisesRegex(BoundaryExecutionError, "authored explicitly"):
             build_boundary_execution(
-                transition_design=transition("reaction_cut"),
+                transition_type="reaction_cut",
                 from_scene_id="scene-001",
                 to_scene_id="scene-001",
             )
 
     def test_state_match_is_not_downgraded_to_no_dependency(self) -> None:
         result = build_boundary_execution(
-            transition_design=transition("reaction_cut"),
+            transition_type="reaction_cut",
             from_scene_id="scene-001",
             to_scene_id="scene-001",
             successor_incoming_visual_requirement="state_match",
@@ -154,7 +127,7 @@ class BoundaryExecutionTests(unittest.TestCase):
 
     def test_scene_return_dissolve_can_keep_state_match_authority(self) -> None:
         result = build_boundary_execution(
-            transition_design=transition("dissolve"),
+            transition_type="dissolve",
             from_scene_id="scene-002",
             to_scene_id="scene-003",
             successor_incoming_visual_requirement="state_match",
@@ -174,7 +147,7 @@ class BoundaryExecutionTests(unittest.TestCase):
 
     def test_continuous_motion_is_a_reachable_serial_visual_contract(self) -> None:
         result = build_boundary_execution(
-            transition_design=transition(),
+            transition_type="action_cut",
             from_scene_id="scene-001",
             to_scene_id="scene-001",
             successor_incoming_visual_requirement="continuous_motion",
@@ -195,7 +168,7 @@ class BoundaryExecutionTests(unittest.TestCase):
     def test_continuous_motion_cannot_cross_scene_boundary(self) -> None:
         with self.assertRaisesRegex(BoundaryExecutionError, "Scene boundary"):
             build_boundary_execution(
-                transition_design=transition(),
+                transition_type="action_cut",
                 from_scene_id="scene-001",
                 to_scene_id="scene-002",
                 successor_incoming_visual_requirement="continuous_motion",
@@ -206,18 +179,22 @@ class BoundaryExecutionTests(unittest.TestCase):
             {
                 "segment_id": "segment-001",
                 "scene_id": "scene-001",
-                "transition_design_json": transition("reaction_cut"),
-                "incoming_visual_requirement": "independent",
             },
             {
                 "segment_id": "segment-002",
                 "scene_id": "scene-001",
-                "transition_design_json": transition("final_end"),
-                "incoming_visual_requirement": "state_match",
             },
         ]
+        authored_boundaries = [
+            {
+                "from_segment_id": "segment-001",
+                "to_segment_id": "segment-002",
+                "transition_type": "reaction_cut",
+                "handoff": "state_match",
+            }
+        ]
 
-        boundaries = build_story_plan_boundaries(plans)
+        boundaries = build_story_plan_boundaries(plans, authored_boundaries)
 
         self.assertEqual(
             boundaries[0]["execution"]["incoming_visual_requirement"],
@@ -244,83 +221,63 @@ class BoundaryExecutionTests(unittest.TestCase):
         self.assertIsNotNone(FORBIDDEN_CROSS_CLIP_DEPENDENCY_RE.search(audio))
 
     def test_screenplay_contract_accepts_explicit_continuous_visual_phase(self) -> None:
-        predecessor = {
-            "scene_id": "scene-001",
-            "transition_design_json": {
-                "type": "action_cut",
-                "outgoing_visible_en": "The paw is still moving left.",
-                "incoming_visible_en": (
-                    "The successor inherits the same motion and Lion facing."
-                ),
-                "action_link_en": "One unfinished action phase continues.",
-                "spatial_link_en": "The same facing and screen direction persist.",
-            },
-        }
-        current = {
-            "scene_id": "scene-001",
-            "incoming_visual_requirement": "continuous_motion",
+        boundary = {
+            "handoff": "continuous_motion",
+            "continuity_handoff_en": (
+                "The successor continues the same unfinished motion and facing."
+            ),
         }
 
         validate_adjacent_visual_boundary_contract(
             segment_id="segment-002",
-            predecessor_plan=predecessor,
-            current_plan=current,
+            predecessor_scene_id="scene-001",
+            current_scene_id="scene-001",
+            boundary=boundary,
+            predecessor_final_shot={
+                "completion_state_en": "open: Lion's paw is still moving left.",
+                "blocking_movement_en": "Lion continues the same leftward motion.",
+            },
         )
 
     def test_screenplay_contract_rejects_same_scene_independent(self) -> None:
-        predecessor = {
-            "scene_id": "scene-001",
-            "transition_design_json": {"type": "reaction_cut"},
-        }
-        current = {
-            "scene_id": "scene-001",
-            "incoming_visual_requirement": "independent",
-        }
-
-        with self.assertRaisesRegex(StoryVideoError, "cannot be independent"):
+        with self.assertRaisesRegex(StoryVideoError, "must be serial"):
             validate_adjacent_visual_boundary_contract(
                 segment_id="segment-002",
-                predecessor_plan=predecessor,
-                current_plan=current,
+                predecessor_scene_id="scene-001",
+                current_scene_id="scene-001",
+                boundary={"handoff": "independent"},
+                predecessor_final_shot={
+                    "completion_state_en": "completed: Lion stops.",
+                    "blocking_movement_en": "Lion stops beside the tree.",
+                },
             )
 
     def test_screenplay_contract_accepts_same_scene_first_frame_reference(self) -> None:
-        predecessor = {
-            "scene_id": "scene-001",
-            "transition_design_json": {"type": "reaction_cut"},
-        }
-        current = {
-            "scene_id": "scene-001",
-            "incoming_visual_requirement": "state_match",
-        }
-
         validate_adjacent_visual_boundary_contract(
             segment_id="segment-002",
-            predecessor_plan=predecessor,
-            current_plan=current,
+            predecessor_scene_id="scene-001",
+            current_scene_id="scene-001",
+            boundary={"handoff": "state_match"},
+            predecessor_final_shot={
+                "completion_state_en": "completed: Lion stops.",
+                "blocking_movement_en": "Lion stops beside the tree.",
+            },
         )
 
     def test_screenplay_contract_rejects_unexplained_continuous_motion_label(self) -> None:
-        predecessor = {
-            "scene_id": "scene-001",
-            "transition_design_json": {
-                "type": "action_cut",
-                "outgoing_visible_en": "The first beat remains readable.",
-                "incoming_visible_en": "The next beat begins.",
-                "action_link_en": "The second event follows the first.",
-                "spatial_link_en": "Both occur in the clearing.",
-            },
-        }
-        current = {
-            "scene_id": "scene-001",
-            "incoming_visual_requirement": "continuous_motion",
-        }
-
-        with self.assertRaisesRegex(StoryVideoError, "must name the inherited"):
+        with self.assertRaisesRegex(StoryVideoError, "must name its unfinished inherited"):
             validate_adjacent_visual_boundary_contract(
                 segment_id="segment-002",
-                predecessor_plan=predecessor,
-                current_plan=current,
+                predecessor_scene_id="scene-001",
+                current_scene_id="scene-001",
+                boundary={
+                    "handoff": "continuous_motion",
+                    "continuity_handoff_en": "The second event follows the first.",
+                },
+                predecessor_final_shot={
+                    "completion_state_en": "open: The first beat remains readable.",
+                    "blocking_movement_en": "Both events occur in the clearing.",
+                },
             )
 
 

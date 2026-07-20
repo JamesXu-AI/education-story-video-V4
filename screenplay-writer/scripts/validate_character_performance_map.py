@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the screenplay-owned Scene/Segment character performance map."""
+"""Validate the performance authority derived from screenplay.md tables."""
 
 from __future__ import annotations
 

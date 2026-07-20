@@ -50,7 +50,7 @@ def _fixture(root: Path, *, asset_id: str, asset: dict) -> tuple[dict, dict, dic
             "body_topology": BODY_TOPOLOGY,
         }
     catalog = {"assets": assets}
-    catalog_path = root / "direct-production-design/assets.json"
+    catalog_path = root / "assets/assets.json"
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
     catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
     manifest_path = root / "previsualize-cinematography/storyboard-compile-manifest.json"
@@ -217,6 +217,7 @@ class AssetCompatibilityTests(unittest.TestCase):
                     parsed=parsed,
                     provisional_plan=plan,
                     catalog=catalog,
+                    repository_root=root,
                 )
 
     def test_wrong_lion_binding_is_blocked_when_prompt_binding_requires_elephant(self) -> None:
@@ -239,6 +240,7 @@ class AssetCompatibilityTests(unittest.TestCase):
                     parsed=parsed,
                     provisional_plan=plan,
                     catalog=catalog,
+                    repository_root=root,
                 )
             path = emit_resolution_rework(
                 task_dir=root,
@@ -269,6 +271,7 @@ class AssetCompatibilityTests(unittest.TestCase):
                 parsed=parsed,
                 provisional_plan=plan,
                 catalog=catalog,
+                repository_root=root,
             )
             _write_review(
                 root,
@@ -282,6 +285,7 @@ class AssetCompatibilityTests(unittest.TestCase):
                 parsed=parsed,
                 provisional_plan=plan,
                 catalog=catalog,
+                repository_root=root,
             )
         self.assertEqual(receipt["overall_verdict"], "PASS")
         self.assertEqual(receipt["contract"], RECEIPT_CONTRACT)
@@ -300,6 +304,7 @@ class AssetCompatibilityTests(unittest.TestCase):
                 parsed=parsed,
                 provisional_plan=plan,
                 catalog=catalog,
+                repository_root=root,
             )
             _write_review(
                 root,
@@ -314,6 +319,7 @@ class AssetCompatibilityTests(unittest.TestCase):
                     parsed=parsed,
                     provisional_plan=plan,
                     catalog=catalog,
+                    repository_root=root,
                 )
             rework = json.loads(
                 rework_path(root, "segment-001").read_text(encoding="utf-8")

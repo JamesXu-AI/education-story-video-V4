@@ -10,6 +10,7 @@ import sys
 
 
 SCRIPT_ROOT = Path(__file__).resolve().parent
+REPOSITORY_ROOT = SCRIPT_ROOT.parents[1]
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
@@ -45,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
             asset_kind=args.asset_kind,
             prompt_file=args.prompt_file,
             output_path=args.output_path,
+            asset_root=REPOSITORY_ROOT / "assets",
             reference_images=args.reference_image,
             size=args.size,
             dry_run=args.dry_run,

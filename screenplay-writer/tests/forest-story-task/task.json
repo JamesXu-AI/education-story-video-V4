@@ -1,0 +1,35 @@
+{
+  "task_id": "forest-story-test",
+  "title": "In the Forest",
+  "country_en": "Saudi Arabia",
+  "source_input": {
+    "resolution": "1080p",
+    "aspect_ratio": "16:9",
+    "title": "In the Forest",
+    "content": "A grandfather tells Uthman how a tyrannical lion is humbled by a mosquito and learns that strength must serve justice."
+  },
+  "input": {
+    "resolution": "1080p",
+    "aspect_ratio": "16:9",
+    "title": "In the Forest",
+    "content": "A grandfather tells Uthman how a tyrannical lion is humbled by a mosquito and learns that strength must serve justice."
+  },
+  "source_context": {
+    "source_language_en": "English",
+    "cultural_context_en": "An Islamic moral tale framed by a grandfather speaking with his grandson around Eid.",
+    "cultural_invariants_en": [
+      "Allah alone is greater than every creature.",
+      "Strength is a trust and never a license to oppress the weak.",
+      "The Eid setting and family storytelling frame remain respectful."
+    ]
+  },
+  "translation": {
+    "prompt_path": "screenplay-writer/references/prompts/translation_gen.md",
+    "output_language": "English"
+  },
+  "voice_audio_source": "speaker_reference_audio",
+  "dialogue_source": "seedance",
+  "target_age_band": "older_9_12",
+  "created_at": "2026-07-20T00:00:00+03:00",
+  "updated_at": "2026-07-20T00:00:00+03:00"
+}

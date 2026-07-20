@@ -179,7 +179,6 @@ def resolve_ordered_references(
                 normalized,
                 kind="image",
                 upload_local=False,
-                presign_expires=86400,
             )
         except seedream.core.SeedMediaError as exc:
             raise VisualAssetGenerationError(str(exc)) from exc
@@ -234,15 +233,15 @@ def _write_json_atomic(path: Path, value: Any) -> None:
     )
 
 
-def _final_output_path(task_root: Path, output_path: Path) -> Path:
+def _final_output_path(asset_root: Path, output_path: Path) -> Path:
+    asset_root = asset_root.expanduser().resolve()
     value = output_path.expanduser()
     if not value.is_absolute():
-        value = task_root / value
+        value = asset_root / value
     value = value.resolve()
-    department_root = (task_root / "direct-production-design").resolve()
-    if value == department_root or department_root not in value.parents:
+    if value == asset_root or asset_root not in value.parents:
         raise VisualAssetGenerationError(
-            "output_path must be a file inside task_root/direct-production-design."
+            "output_path must be a file inside the repository-owned assets directory."
         )
     value.parent.mkdir(parents=True, exist_ok=True)
     return value
@@ -276,6 +275,7 @@ def generate_visual_asset(
     asset_kind: str,
     prompt_file: Path,
     output_path: Path,
+    asset_root: Path,
     reference_images: Iterable[str] | None = None,
     size: str = DEFAULT_IMAGE_SIZE,
     dry_run: bool = False,
@@ -306,7 +306,7 @@ def generate_visual_asset(
     ):
         raise VisualAssetGenerationError("timeout must be a positive integer.")
 
-    final_path = _final_output_path(root, output_path)
+    final_path = _final_output_path(asset_root, output_path)
     stem = final_path.stem
     prompt_path = final_path.parent / f"{stem}.prompt.txt"
     request_path = final_path.parent / f"{stem}.request.json"
@@ -317,7 +317,7 @@ def generate_visual_asset(
         {
             "request_type": "visual_asset_seedream_generation",
             "asset": {"id": normalized_id, "kind": normalized_kind},
-            "output_path": final_path.relative_to(root).as_posix(),
+            "output_path": final_path.relative_to(asset_root.parent).as_posix(),
             "prompt_source": str(prompt_source),
             "reference_plan": reference_plan,
             "provider_request": provider_request,
@@ -347,14 +347,14 @@ def generate_visual_asset(
         raise VisualAssetGenerationError(
             "Seedream visual asset response must be a JSON object."
         )
-    _write_json_atomic(response_path, response)
-    source_url = _single_output_url(response)
+    source_download_url = _single_output_url(response)
+    source_url = seedream.core.persistent_tos_url(source_download_url)
     temporary = final_path.with_name(f".{final_path.name}.download")
     temporary.unlink(missing_ok=True)
     try:
         downloaded = Path(
             seedream.core.download_url(
-                source_url, temporary, timeout=max(timeout, 300)
+                source_download_url, temporary, timeout=max(timeout, 300)
             )
         )
         if not downloaded.is_file() or downloaded.stat().st_size <= 0:
@@ -369,6 +369,7 @@ def generate_visual_asset(
         raise VisualAssetGenerationError(
             f"Failed to download Seedream visual asset: {exc}"
         ) from exc
+    _write_json_atomic(response_path, seedream.core.without_tos_signatures(response))
     result.update(
         {
             "response_path": str(response_path),

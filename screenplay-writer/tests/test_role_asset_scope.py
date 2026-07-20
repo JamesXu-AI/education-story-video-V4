@@ -16,8 +16,8 @@ from story_video.screenplay_contract import (  # noqa: E402
     DIALOGUE_WORDS_PER_SECOND,
     MINIMUM_ACTION_REACTION_SECONDS,
     fixed_screenplay_prompt,
+    validate_dialogue_occupancy,
 )
-from compile_audio_timeline import validate_dialogue_occupancy  # noqa: E402
 from story_video.runtime_support import StoryVideoError  # noqa: E402
 
 
@@ -42,7 +42,6 @@ class RoleAssetScopeTests(unittest.TestCase):
                 {
                     "entity_id": "hero",
                     "screenplay_character_name_en": "Hero",
-                    "entity_label_en": "Brave Hero",
                     "entity_kind": "individual",
                     "group_role_type_en": "none",
                     "ensemble_member_types_en": [],
@@ -50,7 +49,6 @@ class RoleAssetScopeTests(unittest.TestCase):
                 {
                     "entity_id": "crowd",
                     "screenplay_character_name_en": "Crowd",
-                    "entity_label_en": "Village Crowd",
                     "entity_kind": "anonymous_ensemble",
                     "group_role_type_en": "village_witnesses",
                     "ensemble_member_types_en": ["adult village witnesses"],
@@ -65,14 +63,14 @@ class RoleAssetScopeTests(unittest.TestCase):
                             "entity_id": "hero",
                             "presence_mode": "on_screen",
                             "speaks": True,
-                            "dialogue_refs": [{"block_index": 2}],
+                            "line_ids": ["L-001"],
                             "group_role_type_en": "none",
                         },
                         {
                             "entity_id": "crowd",
                             "presence_mode": "on_screen",
                             "speaks": False,
-                            "dialogue_refs": [],
+                            "line_ids": [],
                             "group_role_type_en": "village_witnesses",
                         },
                     ],
@@ -128,41 +126,52 @@ class RoleAssetScopeTests(unittest.TestCase):
     def test_generation_prompt_contains_complete_release_requirements(self) -> None:
         _, generation_prompt = fixed_screenplay_prompt()
 
-        self.assertIn("dialogue_turn_count <= 3", generation_prompt)
-        self.assertIn(
-            "一个实体只要在任意 Segment 说过一句话", generation_prompt
-        )
-        self.assertIn("static_reference_image_count", generation_prompt)
-        self.assertIn("dramatic_workload", generation_prompt)
-        self.assertIn("scene_dramatic_contract_json", generation_prompt)
-        self.assertIn("dramatic_beats_json", generation_prompt)
-        self.assertNotIn("screenplay_gate_review", generation_prompt)
-        self.assertIn("action_subject", generation_prompt)
-        self.assertIn("这些检查是编剧协作本身的发布责任", generation_prompt)
-        self.assertIn("不得把“可独立生成”当成默认创作目标", generation_prompt)
-        self.assertIn("走位/朝向", generation_prompt)
+        for heading in (
+            "## Task",
+            "## Input Contract",
+            "## Decision Rules",
+            "## Output Contract",
+            "## Release Gate",
+        ):
+            self.assertEqual(generation_prompt.count(heading), 1)
+        self.assertIn("TASK_DIR/screenplay-writer/screenplay.md", generation_prompt)
+        self.assertIn("children's educational", generation_prompt)
+        self.assertIn("screenplay-segment-contract.md", generation_prompt)
+        self.assertIn("horizontal", generation_prompt)
+        self.assertIn("large-screen film script", generation_prompt)
+        self.assertIn("author the complete chain required by the contract", generation_prompt)
+        self.assertIn("BGM", generation_prompt)
+        self.assertIn("Validator behavior is governed", generation_prompt)
+        self.assertIn("present_at_open", generation_prompt)
+        self.assertIn("first visibility", generation_prompt)
+        self.assertIn("landing result", generation_prompt)
+        self.assertIn("speech gate", generation_prompt)
+        self.assertIn("Understand the film before authoring tables", generation_prompt)
+        self.assertIn("state_match", generation_prompt)
         self.assertIn("continuous_motion", generation_prompt)
-        self.assertIn("Mandatory internal semantic boundary gate", generation_prompt)
-        self.assertIn("先临时隐藏已有", generation_prompt)
-        self.assertNotIn("每个 Segment 必须自己拥有完整表演和声音", generation_prompt)
         self.assertIn(
             f"dialogue_words / {DIALOGUE_WORDS_PER_SECOND}", generation_prompt
         )
         self.assertIn(
-            f"dialogue_turn_count * {DIALOGUE_TURN_ALLOWANCE_SECONDS}",
+            f"dialogue_line_count * {DIALOGUE_TURN_ALLOWANCE_SECONDS}",
             generation_prompt,
         )
         self.assertIn(
             f"+ {MINIMUM_ACTION_REACTION_SECONDS}", generation_prompt
         )
-        self.assertIn("ensemble_member_types_en", generation_prompt)
-        self.assertIn("老虎不授权家猫", generation_prompt)
         for shared_threshold in (
-            "动作主导段：45%；",
-            "对白与动作混合段：60%；",
-            "对白主导段：72%。",
+            "45% for `action_led`",
+            "60% for",
+            "72% for `dialogue_led`",
         ):
             self.assertIn(shared_threshold, generation_prompt)
+        for stale_clause in (
+            "spec screenplay",
+            "audio-timeline.json",
+            "Do not manufacture text merely to satisfy a column",
+            "not generators",
+        ):
+            self.assertNotIn(stale_clause, generation_prompt)
 
     def test_dialogue_occupancy_uses_declared_workload_limit(self) -> None:
         windows = [

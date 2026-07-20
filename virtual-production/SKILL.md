@@ -16,7 +16,7 @@ Consume these upstream authorities directly:
 
 - `TASK_DIR/previsualize-cinematography/storyboard.md`;
 - `TASK_DIR/previsualize-cinematography/storyboard-compile-manifest.json`;
-- `TASK_DIR/direct-production-design/assets.json`;
+- repository-root `assets/assets.json`;
 - the current screenplay and production-design bibles named by the Storyboard.
 
 `storyboard.data.json` does not exist. Never request, infer, regenerate, convert,

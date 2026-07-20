@@ -29,12 +29,16 @@ story_video.__path__ = extend_path(story_video.__path__, story_video.__name__)
 from story_video.aesthetic_reference import load_aesthetic_reference  # noqa: E402
 from story_video.asset_briefing import (  # noqa: E402
     brief_file_matches,
-    character_portrait_performance_brief,
     group_portrait_subject_count,
     ordered_ensemble_member_types,
     reusable_visual_from_current_record,
     reusable_visual_candidate_from_current_record,
     silent_group_portrait_brief,
+)
+from story_video.asset_catalog import (  # noqa: E402
+    ASSET_CATALOG_RELATIVE_PATH,
+    ASSET_MEDIA_RELATIVE_PATH,
+    reject_task_local_asset_state,
 )
 from story_video.character_performance_map import (  # noqa: E402
     load_character_performance_map,
@@ -50,10 +54,6 @@ from story_video.visual_asset_generation import (  # noqa: E402
     DEFAULT_TIMEOUT,
     generate_visual_asset,
 )
-from story_video.visual_style_contract import (  # noqa: E402
-    VISUAL_STYLE_PROFILE,
-    visual_style_contract,
-)
 from story_video.voice_reference_generation import (  # noqa: E402
     ensure_voice_references,
 )
@@ -61,6 +61,19 @@ from story_video.voice_reference_generation import (  # noqa: E402
 
 class InitialProductionDesignError(RuntimeError):
     pass
+
+
+def _asset_repository_root(
+    task_root: Path, repository_root: Path | None = None
+) -> Path:
+    return (repository_root or task_root).expanduser().resolve()
+
+
+def _asset_catalog_path(task_root: Path, repository_root: Path | None = None) -> Path:
+    return (
+        _asset_repository_root(task_root, repository_root)
+        / ASSET_CATALOG_RELATIVE_PATH
+    )
 
 
 def _load(path: Path, label: str) -> dict[str, Any]:
@@ -118,22 +131,6 @@ def _silent_role_groups(
             )
         grouped[role_type].append(entity)
     return list(grouped.items())
-
-
-def _performance(entity: dict[str, Any]) -> dict[str, str]:
-    label = entity["entity_label_en"]
-    return {
-        "core_desire_en": f"{label} pursues the exact story objective assigned in each Segment and never performs decorative business.",
-        "core_belief_en": f"{label} interprets events through the stable moral and relationship facts recorded by the locked screenplay.",
-        "fear_or_pressure_en": f"{label} responds to immediate story pressure with readable attention, breath and weight rather than random gestures.",
-        "emotional_arc_en": f"{label} moves only through screenplay-authored emotional states and preserves every earned change across editorial cuts.",
-        "attention_logic_en": f"{label} looks first at the current speaker or action cause, then at its consequence, and never scans without motivation.",
-        "listening_behavior_en": f"{label} keeps the mouth closed while listening and responds through eyes, breath and anatomically appropriate posture.",
-        "speech_preparation_en": f"{label} establishes the correct eyeline, takes one grounded breath and prepares the face before exact dialogue begins.",
-        "embodied_acting_en": f"{label} uses the approved species-appropriate body plan with grounded balance, readable weight transfer and believable prop contact.",
-        "settle_behavior_en": f"{label} completes every action, closes the mouth and holds the changed state for the authored safe edit handle.",
-        "forbidden_performance_en": f"{label} never loops, mugs, waves randomly, changes identity, teleports, continues across an editorial cut or invents extra action.",
-    }
 
 
 def _asset_job(
@@ -238,8 +235,10 @@ def _write_asset_plan(
     force_regenerate: set[str],
     codex_reuse: set[str],
     voice_references: dict[str, dict[str, Any]],
+    repository_root: Path | None = None,
 ) -> None:
-    path = root / "direct-production-design" / "assets.json"
+    asset_repository_root = _asset_repository_root(root, repository_root)
+    path = _asset_catalog_path(root, asset_repository_root)
     previous_assets: dict[str, Any] = {}
     if path.is_file():
         previous = _load(path, "production design asset plan")
@@ -272,7 +271,7 @@ def _write_asset_plan(
         reusable = None
         if job["asset_id"] not in force_regenerate:
             reusable = reusable_visual_from_current_record(
-                root=root,
+                root=asset_repository_root,
                 record=previous_record,
                 asset_type=job["kind"],
                 output=output,
@@ -280,7 +279,7 @@ def _write_asset_plan(
             )
             if reusable is None and job["asset_id"] in codex_reuse:
                 reusable = reusable_visual_candidate_from_current_record(
-                    root=root,
+                    root=asset_repository_root,
                     record=previous_record,
                     asset_type=job["kind"],
                     output=output,
@@ -316,7 +315,9 @@ def _write_asset_plan(
             continue
         job = jobs_by_id[asset_id]
         output = job["relative_path"].with_suffix(".png")
-        brief_path = (root / output).parent / f"{output.stem}.brief.txt"
+        brief_path = (
+            asset_repository_root / output
+        ).parent / f"{output.stem}.brief.txt"
         _write(brief_path, job["prompt"])
 
 
@@ -325,10 +326,12 @@ def _semantic_reuse_review(
     jobs: list[dict[str, Any]],
     *,
     force_regenerate: set[str],
+    repository_root: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Expose prompt changes for direct Codex review without making a decision."""
 
-    path = root / "direct-production-design" / "assets.json"
+    asset_repository_root = _asset_repository_root(root, repository_root)
+    path = _asset_catalog_path(root, asset_repository_root)
     if not path.is_file():
         return []
     previous = _load(path, "production design asset plan")
@@ -347,14 +350,16 @@ def _semantic_reuse_review(
             continue
         output = job["relative_path"].with_suffix(".png")
         visual = reusable_visual_candidate_from_current_record(
-            root=root,
+            root=asset_repository_root,
             record=previous_assets.get(asset_id),
             asset_type=job["kind"],
             output=output,
         )
         if visual is None:
             continue
-        brief_path = (root / output).parent / f"{output.stem}.brief.txt"
+        brief_path = (
+            asset_repository_root / output
+        ).parent / f"{output.stem}.brief.txt"
         try:
             previous_brief = brief_path.read_text(encoding="utf-8").rstrip("\n")
         except (FileNotFoundError, OSError, UnicodeDecodeError):
@@ -419,8 +424,9 @@ def _update_asset_plan(
     status: str,
     visual: dict[str, str] | None = None,
     error: str | None = None,
+    repository_root: Path | None = None,
 ) -> None:
-    path = root / "direct-production-design" / "assets.json"
+    path = _asset_catalog_path(root, repository_root)
     plan = _load(path, "production design asset plan")
     record = plan["assets"][asset_id]
     record["status"] = status
@@ -431,8 +437,15 @@ def _update_asset_plan(
     _write(path, plan)
 
 
-def _generate_job(root: Path, job: dict[str, Any], timeout: int) -> dict[str, str]:
-    target = root / job["relative_path"].with_suffix(".png")
+def _generate_job(
+    root: Path,
+    job: dict[str, Any],
+    timeout: int,
+    *,
+    repository_root: Path | None = None,
+) -> dict[str, str]:
+    asset_repository_root = _asset_repository_root(root, repository_root)
+    target = asset_repository_root / job["relative_path"].with_suffix(".png")
     brief_path = target.parent / f"{target.stem}.brief.txt"
     _write(brief_path, job["prompt"])
     result = generate_visual_asset(
@@ -441,12 +454,16 @@ def _generate_job(root: Path, job: dict[str, Any], timeout: int) -> dict[str, st
         asset_kind=job["kind"],
         prompt_file=brief_path,
         output_path=target,
-        reference_images=job["references"],
+        reference_images=[
+            str(asset_repository_root / reference)
+            for reference in job["references"]
+        ],
+        asset_root=asset_repository_root / ASSET_MEDIA_RELATIVE_PATH,
         size=DEFAULT_IMAGE_SIZE,
         timeout=timeout,
     )
     return {
-        "path": target.relative_to(root).as_posix(),
+        "path": target.relative_to(asset_repository_root).as_posix(),
         "uri": result["source_url"],
     }
 
@@ -457,9 +474,11 @@ def _run_jobs(
     *,
     timeout: int,
     max_workers: int,
+    repository_root: Path | None = None,
 ) -> dict[str, dict[str, str]]:
+    asset_repository_root = _asset_repository_root(root, repository_root)
     plan = _load(
-        root / "direct-production-design" / "assets.json",
+        _asset_catalog_path(root, asset_repository_root),
         "production design asset plan",
     )
     results: dict[str, dict[str, str]] = {}
@@ -471,7 +490,7 @@ def _run_jobs(
             record.get("status") == "ready"
             and isinstance(visual, dict)
             and set(visual) == {"path", "uri"}
-            and (root / visual["path"]).is_file()
+            and (asset_repository_root / visual["path"]).is_file()
         ):
             results[job["asset_id"]] = dict(visual)
         else:
@@ -481,7 +500,13 @@ def _run_jobs(
     failures: list[str] = []
     with ThreadPoolExecutor(max_workers=min(max_workers, len(pending))) as executor:
         futures = {
-            executor.submit(_generate_job, root, job, timeout): job["asset_id"]
+            executor.submit(
+                _generate_job,
+                root,
+                job,
+                timeout,
+                repository_root=asset_repository_root,
+            ): job["asset_id"]
             for job in pending
         }
         for future in as_completed(futures):
@@ -489,9 +514,21 @@ def _run_jobs(
             try:
                 visual = future.result()
                 results[asset_id] = visual
-                _update_asset_plan(root, asset_id, status="ready", visual=visual)
+                _update_asset_plan(
+                    root,
+                    asset_id,
+                    status="ready",
+                    visual=visual,
+                    repository_root=asset_repository_root,
+                )
             except Exception as exc:
-                _update_asset_plan(root, asset_id, status="failed", error=str(exc))
+                _update_asset_plan(
+                    root,
+                    asset_id,
+                    status="failed",
+                    error=str(exc),
+                    repository_root=asset_repository_root,
+                )
                 failures.append(f"{asset_id}: {exc}")
     if failures:
         raise InitialProductionDesignError(
@@ -506,6 +543,7 @@ def _run_dependency_graph(
     *,
     timeout: int,
     max_workers: int,
+    repository_root: Path | None = None,
 ) -> dict[str, dict[str, str]]:
     remaining = {job["asset_id"]: job for job in jobs}
     completed: dict[str, dict[str, str]] = {}
@@ -531,7 +569,11 @@ def _run_dependency_graph(
                 f"Production-design asset dependency cycle: {blocked}"
             )
         wave = _run_jobs(
-            root, ready, timeout=timeout, max_workers=max_workers
+            root,
+            ready,
+            timeout=timeout,
+            max_workers=max_workers,
+            repository_root=repository_root,
         )
         completed.update(wave)
         for job in ready:
@@ -565,6 +607,7 @@ def build_task(
     inspect_semantic_reuse: bool = False,
 ) -> dict[str, Any]:
     root = task_dir.expanduser().resolve(strict=True)
+    reject_task_local_asset_state(root)
     if not 1 <= max_workers <= 8:
         raise InitialProductionDesignError("max_workers must be 1-8")
     role_scope = role_asset_scope_gate(root)
@@ -580,7 +623,8 @@ def build_task(
     silent_groups = _silent_role_groups(entities, speaking_ids)
     entity_by_id = {entity["entity_id"]: entity for entity in entities}
     screenplay_characters = {
-        character["name_en"]: character for character in screenplay["characters"]
+        character["screenplay_character_name_en"]: character
+        for character in screenplay["characters"]
     }
     character_plan_by_id = {
         item["entity_id"]: item for item in plan["characters"]
@@ -599,18 +643,6 @@ def build_task(
         entities=entities,
         role_asset_by_entity=role_asset_by_entity,
     )
-    background_location = next(
-        location
-        for location in plan["locations"]
-        if location["location_id"] == plan["character_background_location_id"]
-    )
-    character_background_design = {
-        "location_id": background_location["location_id"],
-        "description_en": background_location["description_en"],
-        "environment_state_en": background_location["environment_state_en"],
-        "lighting_state_en": background_location["lighting_state_en"],
-        "palette_materials_en": background_location["palette_materials_en"],
-    }
     character_background_location_id = plan["character_background_location_id"]
 
     jobs: list[dict[str, Any]] = []
@@ -618,7 +650,7 @@ def build_task(
     for prop in plan["props"]:
         asset_id = prop["asset_id"]
         output = (
-            Path("direct-production-design/assets/props")
+            ASSET_MEDIA_RELATIVE_PATH / "props"
             / asset_id.removeprefix("prop-")
             / "image"
         )
@@ -647,7 +679,7 @@ def build_task(
         design = character_plan_by_id[entity_id]
         prop_ids = design["portrait_prop_ids"]
         output = (
-            Path("direct-production-design/assets/characters")
+            ASSET_MEDIA_RELATIVE_PATH / "characters"
             / entity_id
             / "identity"
         )
@@ -666,13 +698,13 @@ def build_task(
                 kind="character",
                 prompt=(
                     "Generate one full-body final-look portrait of exactly one "
-                    "dialogue-owning subject inside the task-bound environment "
-                    "described below. Never "
-                    "use a plain, solid-color, studio, catalogue, cutout, empty, or "
-                    "transparent background. The portrait subject must be the only "
-                    "living being anywhere in the image: no other person, animal, "
-                    "insect, crowd, silhouette, reflection, statue-like character, or "
-                    "distant background cameo. Use the exact "
+                    "dialogue-owning subject on a clean pure-white background. Use a "
+                    "flat, even, seamless pure-white (#FFFFFF) studio backdrop with no "
+                    "scene, environment, floor line, horizon, prop, texture, gradient, "
+                    "shadow cast on the backdrop, or colored tint. The portrait subject "
+                    "must be the only living being anywhere in the image: no other "
+                    "person, animal, insect, crowd, silhouette, reflection, statue-like "
+                    "character, or distant background cameo. Use the exact "
                     "task-authored identity and costume below. Show a motivated expression, "
                     "active eyeline, visible attention and readable thought; never a blank "
                     "stare or catalogue smile. For every non-human, use the exact natural "
@@ -688,15 +720,11 @@ def build_task(
                     + prop_instruction
                     + " TASK-AUTHORED CHARACTER DESIGN: "
                     + design["design_description_en"]
-                    + " WRITER PERFORMANCE ENTITY: "
-                    + speaker["description_en"]
-                    + " TASK-BOUND CHARACTER BACKGROUND DESIGN JSON: "
-                    + json.dumps(character_background_design, ensure_ascii=False)
-                    + " "
-                    + character_portrait_performance_brief(
-                        screenplay=screenplay,
-                        character_name_en=speaker["screenplay_character_name_en"],
-                    )
+                    + " REUSABLE ACTOR PROFILE JSON: "
+                    + json.dumps(design["actor_profile"], ensure_ascii=False)
+                    + " Treat this as a reusable casting portrait: show the actor's "
+                    "characteristic default presence, not any current plot event, "
+                    "relationship, injury, victory, defeat, or line delivery."
                     + aesthetic_text
                 ),
                 relative_path=output,
@@ -725,7 +753,7 @@ def build_task(
             excluded_dialogue_characters=excluded_dialogue_characters,
         )
         output = (
-            Path("direct-production-design/assets/role-groups")
+            ASSET_MEDIA_RELATIVE_PATH / "role-groups"
             / asset_id.removeprefix("group-")
             / "group"
         )
@@ -736,8 +764,10 @@ def build_task(
                 kind="ensemble_roster",
                 prompt=(
                     group_brief
-                    + " TASK-BOUND CHARACTER BACKGROUND DESIGN JSON: "
-                    + json.dumps(character_background_design, ensure_ascii=False)
+                    + " Use a clean pure-white background: a flat, even, seamless "
+                    "pure-white (#FFFFFF) studio backdrop with no scene, environment, "
+                    "floor line, horizon, prop, texture, gradient, shadow cast on the "
+                    "backdrop, or colored tint."
                     + aesthetic_text
                 ),
                 relative_path=output,
@@ -750,7 +780,7 @@ def build_task(
         asset_id = costume["asset_id"]
         character_id = costume["character_id"]
         output = (
-            Path("direct-production-design/assets/costumes")
+            ASSET_MEDIA_RELATIVE_PATH / "costumes"
             / asset_id.removeprefix("costume-")
             / "image"
         )
@@ -763,17 +793,16 @@ def build_task(
                     "Generate one isolated appearance-state reference for the same character "
                     "shown in reference image 1. Preserve identity, anatomy, scale, base "
                     "costume and approved accessories exactly; change only the task-authored "
-                    "state. Preserve the task-bound environment declared below. "
-                    "Never use a plain, solid-color, studio, catalogue, cutout, "
-                    "empty, or transparent background. The referenced character must be "
+                    "state. Use a clean pure-white background: a flat, even, seamless "
+                    "pure-white (#FFFFFF) studio backdrop with no scene, environment, "
+                    "floor line, horizon, prop, texture, gradient, shadow cast on the "
+                    "backdrop, or colored tint. The referenced character must be "
                     "the only living being anywhere in the image: no other person, animal, "
                     "insect, crowd, silhouette, reflection, or distant background cameo. "
                     "No second subject, attacker, text, "
                     "grid or logo. "
                     "TASK-AUTHORED APPEARANCE STATE: "
                     + costume["description_en"]
-                    + " TASK-BOUND CHARACTER BACKGROUND DESIGN JSON: "
-                    + json.dumps(character_background_design, ensure_ascii=False)
                     + aesthetic_text
                 ),
                 relative_path=output,
@@ -787,7 +816,7 @@ def build_task(
         prop_ids = location["fixed_prop_ids"]
         role_asset_ids = scene_role_assets_by_location[asset_id]
         output = (
-            Path("direct-production-design/assets/locations")
+            ASSET_MEDIA_RELATIVE_PATH / "locations"
             / asset_id.removeprefix("loc-")
             / "master"
         )
@@ -891,6 +920,7 @@ def build_task(
         root,
         jobs,
         force_regenerate=force_regenerate,
+        repository_root=REPOSITORY_ROOT,
     )
     if inspect_semantic_reuse:
         return {
@@ -920,6 +950,7 @@ def build_task(
     voice_references = ensure_voice_references(
         root,
         plan["characters"],
+        repository_root=REPOSITORY_ROOT,
         timeout=timeout,
         max_workers=max_workers,
         force_regenerate=force_voice_regenerate,
@@ -931,76 +962,57 @@ def build_task(
         force_regenerate=force_regenerate | codex_regenerate_visual,
         codex_reuse=codex_reuse,
         voice_references=voice_references,
+        repository_root=REPOSITORY_ROOT,
     )
     visuals = _run_dependency_graph(
-        root, jobs, timeout=timeout, max_workers=max_workers
+        root,
+        jobs,
+        timeout=timeout,
+        max_workers=max_workers,
+        repository_root=REPOSITORY_ROOT,
     )
 
     assets: dict[str, Any] = {}
     for speaker in speakers:
         entity_id = speaker["entity_id"]
         design = character_plan_by_id[entity_id]
-        prop_ids = design["portrait_prop_ids"]
         assets[entity_id] = {
             "type": "character",
-            "status": "ready",
-            "description_en": design["design_description_en"]
-            + (
-                " Approved portrait props: " + ", ".join(prop_ids) + "."
-                if prop_ids
-                else " No independent portrait prop is approved."
-            ),
+            "description_en": design["design_description_en"],
+            "actor_profile": design["actor_profile"],
             "body_topology": design["body_topology"],
             "visual": visuals[entity_id],
-            "performance": _performance(speaker),
             "voice": voice_references[entity_id],
         }
 
-    excluded_speaking_ids = [
-        entity["entity_id"] for entity in entities if entity["entity_id"] in speaking_ids
-    ]
-    excluded_dialogue_names = [
-        entity["screenplay_character_name_en"]
-        for entity in entities
-        if entity["entity_id"] in speaking_ids
-    ]
     for role_type, group_entities in silent_groups:
         asset_id = "group-" + _slug(role_type)
         member_types = ordered_ensemble_member_types(group_entities)
         subject_count = group_portrait_subject_count(member_types)
         assets[asset_id] = {
             "type": "ensemble_roster",
-            "status": "ready",
             "description_en": (
-                f"One group portrait for silent role type {role_type}; closed member "
+                "One reusable natural-animal group portrait with the closed member "
                 "types: " + ", ".join(member_types) + "."
             ),
             "members": [
                 {
-                    "member_type_id": _slug(role_type) + "-silent-role-type",
-                    "group_role_type_en": role_type,
+                    "member_type_id": "closed-roster",
                     "roster_asset": {
                         **visuals[asset_id],
                         "subject_count": subject_count,
                     },
-                    "included_entity_ids": [
-                        entity["entity_id"] for entity in group_entities
-                    ],
-                    "excluded_speaking_entity_ids": excluded_speaking_ids,
-                    "excluded_dialogue_character_names_en": excluded_dialogue_names,
                     "allowed_member_types_en": member_types,
                     "variation_profile": {
                         "locked_traits_en": (
-                            f"Preserve the approved {role_type} silhouettes and these exact "
+                            "Preserve the approved natural silhouettes and these exact "
                             "member types without substitution: " + ", ".join(member_types)
                         ),
                         "allowed_variation_en": (
                             "Allow only small natural variation inside an approved member "
-                            "type; never introduce another species/type or any dialogue "
-                            "portrait identity/species."
+                            "type; never introduce another species or type."
                         ),
                     },
-                    "authority": "silent_cinematic_role_group_portrait",
                 }
             ],
         }
@@ -1008,42 +1020,34 @@ def build_task(
     for prop in plan["props"]:
         assets[prop["asset_id"]] = {
             "type": "prop",
-            "status": "ready",
             "description_en": prop["description_en"],
             "visual": visuals[prop["asset_id"]],
         }
     for costume in plan["costumes"]:
         assets[costume["asset_id"]] = {
             "type": "costume",
-            "status": "ready",
             "description_en": costume["description_en"],
             "visual": visuals[costume["asset_id"]],
             "character_id": costume["character_id"],
             "appearance_state_en": costume["description_en"],
-            "authority": "character_costume_and_appearance_state",
         }
     for location in plan["locations"]:
         assets[location["location_id"]] = {
             "type": "location_master",
-            "status": "ready",
             "description_en": location["description_en"],
             "visual": visuals[location["location_id"]],
             "included_prop_ids": location["fixed_prop_ids"],
             "included_role_asset_ids": scene_role_assets_by_location[
                 location["location_id"]
             ],
-            "authority": "scene_cast_location_with_current_props_and_roles",
         }
 
     catalog = {
         "contract": "production-design-assets",
-        "visual_style_profile": VISUAL_STYLE_PROFILE,
-        "visual_style_contract": visual_style_contract(),
-        "path_resolution": "task_root_relative",
-        "cross_segment_policy": "narrative_state_through_independent_edits",
+        "path_resolution": "repository_root_relative",
         "assets": assets,
     }
-    _write(root / "direct-production-design" / "assets.json", catalog)
+    _write(REPOSITORY_ROOT / ASSET_CATALOG_RELATIVE_PATH, catalog)
 
     semantic_summary = {
         "character_background_location_id": character_background_location_id,
@@ -1090,11 +1094,10 @@ def build_task(
         "current Scene role asset, and must include the exhaustive bound cast.\n\n"
         "## Environment reference\n\n"
         "The Scene-cast location reference is the single full-frame environment image "
-        "authority and includes every role used by its bound Scene. The task-semantic "
-        "character_background_location_id supplies textual forest environment design to "
-        "every character, costume, and ensemble reference without creating a generation "
-        "cycle. Reuse the Scene-cast location reference directly for every bound Scene "
-        "and Segment. Never generate "
+        "authority and includes every role used by its bound Scene. Character, costume, "
+        "and ensemble portraits are rendered on a clean pure-white studio backdrop and "
+        "carry no scene environment. Reuse the Scene-cast location reference directly "
+        "for every bound Scene and Segment. Never generate "
         "a Scene background, global background, camera background, or other full-frame "
         "derivative of the location master."
         + aesthetic_spec

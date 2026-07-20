@@ -29,7 +29,6 @@ from story_video.aesthetic_reference import load_aesthetic_reference  # noqa: E4
 from story_video.location_continuity_packages import (  # noqa: E402
     load_location_continuity_packages,
 )
-from story_video.screenplay_contract import load_screenplay_file  # noqa: E402
 from story_video.character_performance_map import (  # noqa: E402
     load_character_performance_map,
 )
@@ -55,11 +54,6 @@ def _validate_silent_group_authority(
         for call in segment["calls"]
         if call["speaks"]
     }
-    excluded_dialogue_names = [
-        entity["screenplay_character_name_en"]
-        for entity in entities
-        if entity["entity_id"] in speaking_ids
-    ]
     grouped: dict[str, list[dict[str, object]]] = defaultdict(list)
     for entity in entities:
         if entity["entity_id"] not in speaking_ids:
@@ -80,26 +74,11 @@ def _validate_silent_group_authority(
                 f"{asset_id} must contain exactly one current role-group record"
             )
         member = members[0]
-        expected_entity_ids = [entity["entity_id"] for entity in role_entities]
         expected_member_types = ordered_ensemble_member_types(role_entities)
         expected_subject_count = group_portrait_subject_count(expected_member_types)
-        if member.get("group_role_type_en") != role_type:
-            raise ProductionDesignError(f"{asset_id} role type differs from screenplay")
-        if member.get("included_entity_ids") != expected_entity_ids:
-            raise ProductionDesignError(
-                f"{asset_id} included entities differ from current performance authority"
-            )
         if member.get("allowed_member_types_en") != expected_member_types:
             raise ProductionDesignError(
                 f"{asset_id} allowed member types differ from current performance authority"
-            )
-        if set(member.get("excluded_speaking_entity_ids", [])) != speaking_ids:
-            raise ProductionDesignError(
-                f"{asset_id} excluded dialogue identities are stale"
-            )
-        if member.get("excluded_dialogue_character_names_en") != excluded_dialogue_names:
-            raise ProductionDesignError(
-                f"{asset_id} excluded dialogue portrait species/types are stale"
             )
         if member.get("roster_asset", {}).get("subject_count") != expected_subject_count:
             raise ProductionDesignError(
@@ -120,10 +99,7 @@ def _validate_silent_group_authority(
 
 def validate_task(task_dir: Path) -> dict[str, object]:
     task_dir = task_dir.expanduser().resolve(strict=True)
-    for relative in (
-        "screenplay-writer/screenplay.md",
-        "screenplay-writer/character-performance-map.json",
-    ):
+    for relative in ("screenplay-writer/screenplay.md",):
         path = task_dir / relative
         if not path.is_file() or path.stat().st_size <= 0:
             raise ProductionDesignError(f"Missing current screenplay input: {relative}")
@@ -140,11 +116,10 @@ def validate_task(task_dir: Path) -> dict[str, object]:
     performance = load_character_performance_map(task_dir)
     silent_group_count = _validate_silent_group_authority(performance, catalog)
     aesthetic_reference = load_aesthetic_reference(task_dir)
-    screenplay = load_screenplay_file(
-        task_dir / "screenplay-writer" / "screenplay.md"
-    )
     location_packages = load_location_continuity_packages(task_dir)
-    expected_scene_ids = {scene["scene_id"] for scene in screenplay["scenes"]}
+    expected_scene_ids = {
+        segment["scene_id"] for segment in performance["scene_segment_calls"]
+    }
     packaged_scene_ids = {
         scene_id
         for location in location_packages["locations"]
@@ -157,15 +132,6 @@ def validate_task(task_dir: Path) -> dict[str, object]:
             f"expected={sorted(expected_scene_ids)}, actual={sorted(packaged_scene_ids)}"
         )
     voice_result = validate_voice_authority(task_dir)
-    incomplete = sorted(
-        asset_id
-        for asset_id, asset in catalog["assets"].items()
-        if asset.get("status") != "ready"
-    )
-    if incomplete:
-        raise ProductionDesignError(
-            "Production assets are incomplete: " + ", ".join(incomplete)
-        )
     return {
         "status": "PASS",
         "asset_count": len(catalog["assets"]),

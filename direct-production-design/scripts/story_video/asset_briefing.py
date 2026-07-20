@@ -1,4 +1,4 @@
-"""Compile story/performance authority into exact portrait-generation briefs."""
+"""Compile exact reusable asset-generation briefs."""
 
 from __future__ import annotations
 
@@ -51,69 +51,6 @@ def group_portrait_subject_count(member_types: list[str]) -> int:
     return max(2, len(member_types))
 
 
-def first_dialogue_delivery(
-    screenplay: dict[str, Any], *, character_name_en: str
-) -> str:
-    """Select the writer-authored first-impression performance for a portrait."""
-
-    for segment in screenplay.get("segments", []):
-        for block in segment.get("blocks", []):
-            if (
-                block.get("type") == "dialogue"
-                and block.get("speaker_en") == character_name_en
-            ):
-                delivery = block.get("delivery_en")
-                if isinstance(delivery, str) and delivery.strip():
-                    return delivery.strip()
-                raise AssetBriefingError(
-                    f"First dialogue for {character_name_en} lacks delivery_en."
-                )
-    raise AssetBriefingError(
-        f"Dialogue-owning character {character_name_en} has no authored delivery."
-    )
-
-
-def character_portrait_performance_brief(
-    *,
-    screenplay: dict[str, Any],
-    character_name_en: str,
-) -> str:
-    """Compile a concrete closed-mouth portrait expression from screenplay authority."""
-
-    characters = {
-        item.get("name_en"): item
-        for item in screenplay.get("characters", [])
-        if isinstance(item, dict)
-    }
-    character = characters.get(character_name_en)
-    if not isinstance(character, dict):
-        raise AssetBriefingError(
-            f"Missing screenplay Character authority for {character_name_en}."
-        )
-    delivery = first_dialogue_delivery(
-        screenplay, character_name_en=character_name_en
-    )
-    narrative_function = character.get("narrative_function_en")
-    description = character.get("description_en")
-    if not all(
-        isinstance(value, str) and value.strip()
-        for value in (narrative_function, description)
-    ):
-        raise AssetBriefingError(
-            f"Screenplay Character authority for {character_name_en} is incomplete."
-        )
-    return (
-        "EXACT PORTRAIT PERFORMANCE AUTHORITY — The face, eyes, eyeline, brow or "
-        "species-equivalent facial features, and grounded posture must read as "
-        f"'{delivery}'. Keep the mouth naturally closed because this is a still "
-        "portrait, while preserving the thought and emotional pressure of that exact "
-        "writer-authored first dialogue delivery. Do not replace it with a neutral "
-        "face, generic smile, random cuteness, unrelated anger, or a later injury "
-        f"state. Dramatic function: {narrative_function.strip()} Character behavior: "
-        f"{description.strip()}"
-    )
-
-
 def silent_group_portrait_brief(
     *,
     role_type_en: str,
@@ -128,7 +65,7 @@ def silent_group_portrait_brief(
     allowed_cast = [
         {
             "entity_id": entity["entity_id"],
-            "label_en": entity["entity_label_en"],
+            "label_en": entity["screenplay_character_name_en"],
             "description_en": entity["description_en"],
             "ensemble_member_types_en": entity["ensemble_member_types_en"],
         }
@@ -136,7 +73,7 @@ def silent_group_portrait_brief(
     ]
     character_authority = [
         {
-            "name_en": character["name_en"],
+            "name_en": character["screenplay_character_name_en"],
             "narrative_function_en": character["narrative_function_en"],
             "description_en": character["description_en"],
         }
@@ -144,7 +81,7 @@ def silent_group_portrait_brief(
     ]
     excluded_dialogue_authority = [
         {
-            "name_en": character["name_en"],
+            "name_en": character["screenplay_character_name_en"],
             "description_en": character["description_en"],
         }
         for character in excluded_dialogue_characters
@@ -248,7 +185,7 @@ def reusable_visual_candidate_from_current_record(
     if (
         not isinstance(record, dict)
         or record.get("type") != asset_type
-        or record.get("status") != "ready"
+        or record.get("status", "ready") != "ready"
     ):
         return None
     visual = record.get("visual")

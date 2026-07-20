@@ -13,11 +13,24 @@ if str(SCRIPT_ROOT) not in sys.path:
 
 from story_video.production_design_plan import (  # noqa: E402
     PLAN_RELATIVE_PATH,
+    _actor_profile,
     load_production_design_plan,
 )
 
 
 class ProductionDesignPlanTests(unittest.TestCase):
+    def test_actor_profile_rejects_one_story_assignment(self) -> None:
+        with self.assertRaisesRegex(ValueError, "reusable actor"):
+            _actor_profile(
+                {
+                    "name_en": "Navigator",
+                    "personality_en": "Pursues the current story objective.",
+                    "screen_presence_en": "Calm and focused.",
+                    "acting_range_en": "Concern, resolve, and relief.",
+                },
+                "character plan navigator.actor_profile",
+            )
+
     def test_loader_accepts_arbitrary_task_semantics_without_named_story_branches(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -29,6 +42,12 @@ class ProductionDesignPlanTests(unittest.TestCase):
                 "characters": [
                     {
                         "entity_id": "navigator",
+                        "actor_profile": {
+                            "name_en": "Navigator",
+                            "personality_en": "Focused, observant, practical, and quietly adventurous.",
+                            "screen_presence_en": "Economical movement, alert eyes, and calm physical precision.",
+                            "acting_range_en": "Curiosity, concentration, concern, resolve, relief, and dry humor.",
+                        },
                         "design_description_en": "A precise task-authored navigator design.",
                         "body_topology": {
                             "body_plan_en": "upright bipedal human actor",

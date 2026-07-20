@@ -264,6 +264,68 @@ def normalize_tos_key(key: str | None, source_name: str, kind: str) -> str:
     return normalized
 
 
+def tos_public_url(key: str) -> str:
+    """Return the stable public object URL; never persist a presigned URL."""
+
+    settings = tos_settings()
+    normalized_key = str(key).lstrip("/")
+    if not normalized_key or ".." in pathlib.PurePosixPath(normalized_key).parts:
+        raise SeedMediaError("TOS key must be a non-empty safe object key")
+    endpoint = settings["endpoint"].strip().rstrip("/")
+    if "://" not in endpoint:
+        endpoint = "https://" + endpoint
+    parsed = urllib.parse.urlsplit(endpoint)
+    if (
+        parsed.scheme.lower() != "https"
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in {"", "/"}
+    ):
+        raise SeedMediaError(
+            "STORAGE_TOS_ENDPOINT must be one HTTPS origin without path or query"
+        )
+    bucket = settings["bucket"].strip()
+    host = parsed.netloc
+    if not host.casefold().startswith(bucket.casefold() + "."):
+        host = f"{bucket}.{host}"
+    encoded_key = urllib.parse.quote(normalized_key, safe="/-._~")
+    return urllib.parse.urlunsplit(("https", host, "/" + encoded_key, "", ""))
+
+
+def _is_tos_http_url(value: str) -> bool:
+    parsed = urllib.parse.urlsplit(value)
+    hostname = (parsed.hostname or "").casefold()
+    return (
+        parsed.scheme.lower() in {"http", "https"}
+        and bool(hostname)
+        and any(label == "tos" or label.startswith("tos-") for label in hostname.split("."))
+    )
+
+
+def persistent_tos_url(value: str) -> str:
+    """Normalize a provider TOS URL to its unsigned, persistent identity."""
+
+    if not isinstance(value, str) or not _is_tos_http_url(value.strip()):
+        raise SeedMediaError("Expected an absolute TOS HTTP(S) URL")
+    parsed = urllib.parse.urlsplit(value.strip())
+    return urllib.parse.urlunsplit(("https", parsed.netloc, parsed.path, "", ""))
+
+
+def without_tos_signatures(value: Any) -> Any:
+    """Recursively remove transient TOS query signatures from persisted evidence."""
+
+    if isinstance(value, str) and _is_tos_http_url(value):
+        return persistent_tos_url(value)
+    if isinstance(value, dict):
+        return {key: without_tos_signatures(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [without_tos_signatures(item) for item in value]
+    return value
+
+
 def tos_presign(key: str, *, method: str = "get", expires: int = 86400) -> str:
     if expires < 1 or expires > 604800:
         raise SeedMediaError("Presigned URL expiry must be between 1 and 604800 seconds")
@@ -293,6 +355,7 @@ def tos_upload_path(
         "etag": getattr(output, "etag", None),
         "request_id": getattr(output, "request_id", None),
         "tos_uri": f"tos://{settings['bucket']}/{object_key}",
+        "public_url": tos_public_url(object_key),
     }
 
 
@@ -308,10 +371,11 @@ def tos_upload_bytes(
         "etag": getattr(output, "etag", None),
         "request_id": getattr(output, "request_id", None),
         "tos_uri": f"tos://{settings['bucket']}/{object_key}",
+        "public_url": tos_public_url(object_key),
     }
 
 
-def resolve_input(value: str, *, kind: str, upload_local: bool, presign_expires: int) -> str:
+def resolve_input(value: str, *, kind: str, upload_local: bool) -> str:
     if is_remote(value):
         return value
     path = pathlib.Path(value).expanduser()
@@ -323,7 +387,7 @@ def resolve_input(value: str, *, kind: str, upload_local: bool, presign_expires:
     if kind == "image" and not upload_local:
         return local_data_uri(str(path))
     uploaded = tos_upload_path(path, kind=f"inputs/{kind}")
-    return tos_presign(uploaded["key"], expires=presign_expires)
+    return uploaded["public_url"]
 
 
 def add_media_content(
@@ -333,14 +397,12 @@ def add_media_content(
     kind: str,
     role: str,
     upload_local: bool,
-    presign_expires: int,
 ) -> None:
     for value in values:
         url = resolve_input(
             value,
             kind=kind,
             upload_local=upload_local,
-            presign_expires=presign_expires,
         )
         content.append({"type": f"{kind}_url", f"{kind}_url": {"url": url}, "role": role})
 
@@ -365,10 +427,7 @@ def command_config(_: argparse.Namespace) -> dict[str, Any]:
 
 def command_upload(args: argparse.Namespace) -> dict[str, Any]:
     require_environment(*TOS_ENV)
-    result = tos_upload_path(pathlib.Path(args.file).expanduser(), key=args.key, kind=args.kind)
-    if args.presign:
-        result["presigned_get_url"] = tos_presign(result["key"], expires=args.expires)
-    return result
+    return tos_upload_path(pathlib.Path(args.file).expanduser(), key=args.key, kind=args.kind)
 
 
 def command_presign(args: argparse.Namespace) -> dict[str, Any]:
@@ -408,8 +467,6 @@ def build_parser() -> argparse.ArgumentParser:
     upload.add_argument("file")
     upload.add_argument("--key")
     upload.add_argument("--kind", default="assets")
-    upload.add_argument("--presign", action="store_true")
-    upload.add_argument("--expires", type=int, default=86400)
     upload.set_defaults(handler=command_upload)
 
     presign = root.add_parser("presign", help="Create a temporary signed URL")

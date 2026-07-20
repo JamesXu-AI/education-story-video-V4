@@ -19,6 +19,7 @@ ROOT_KEYS = {
 }
 CHARACTER_KEYS = {
     "entity_id",
+    "actor_profile",
     "design_description_en",
     "body_topology",
     "portrait_prop_ids",
@@ -26,6 +27,17 @@ CHARACTER_KEYS = {
     "voice_sample_text_en",
     "voice_speech_rate",
 }
+ACTOR_PROFILE_KEYS = {
+    "name_en",
+    "personality_en",
+    "screen_presence_en",
+    "acting_range_en",
+}
+STORY_BOUND_ACTOR_PROFILE_RE = re.compile(
+    r"\b(?:screenplay|segment|current story|story objective|narrative function|"
+    r"plot event|scene-specific)\b",
+    re.IGNORECASE,
+)
 BODY_TOPOLOGY_KEYS = {
     "body_plan_en",
     "total_limb_count",
@@ -62,6 +74,20 @@ def _exact(value: Any, keys: set[str], label: str) -> dict[str, Any]:
             f"{label} must use exact keys: {sorted(keys)}"
         )
     return value
+
+
+def _actor_profile(value: Any, label: str) -> dict[str, str]:
+    profile = _exact(value, ACTOR_PROFILE_KEYS, label)
+    normalized = {
+        key: _text(profile[key], f"{label}.{key}")
+        for key in ACTOR_PROFILE_KEYS
+    }
+    for key, text in normalized.items():
+        if STORY_BOUND_ACTOR_PROFILE_RE.search(text):
+            raise ProductionDesignPlanError(
+                f"{label}.{key} must describe a reusable actor, not one story assignment"
+            )
+    return normalized
 
 
 def _text(value: Any, label: str) -> str:
@@ -205,6 +231,10 @@ def load_production_design_plan(
         characters.append(
             {
                 "entity_id": entity_id,
+                "actor_profile": _actor_profile(
+                    item["actor_profile"],
+                    f"character plan {entity_id}.actor_profile",
+                ),
                 "design_description_en": _text(
                     item["design_description_en"],
                     f"character plan {entity_id}.design_description_en",

@@ -362,7 +362,7 @@ def _runtime_reference_media_content(
                     "local_filename": local.name,
                     "duration_seconds": duration,
                     "audio_included": audio_included,
-                    "url": seedance.core.tos_presign(upload["key"], expires=604800),
+                    "url": upload["public_url"],
                     "tos": upload,
                 }
             )
@@ -812,9 +812,9 @@ def generate_one(
             "provider_task_id": task_id,
             "provider_attempt_id": provider_attempt_id,
             "video_path": "video.mp4",
-            "video_source_url": video_url,
+            "video_source_url": seedance.core.persistent_tos_url(video_url),
             "last_frame_path": "last-frame.png",
-            "last_frame_source_url": last_frame_url,
+            "last_frame_source_url": seedance.core.persistent_tos_url(last_frame_url),
             "video_bytes": video_path.stat().st_size,
             "last_frame_bytes": last_frame_path.stat().st_size,
             "media_probe": media_probe,

@@ -23,7 +23,8 @@ from .seed_master_runtime import (
 )
 
 
-ASSET_CATALOG_RELATIVE = Path("direct-production-design/assets.json")
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+ASSET_CATALOG_RELATIVE = Path("assets/assets.json")
 PACKET_DIR_RELATIVE = Path(
     ".pending/virtual-production/asset-compatibility-review-packets"
 )
@@ -160,12 +161,11 @@ def _catalog_semantics(
     for field in (
         "character_id",
         "appearance_state_en",
-        "authority",
         "sound_role",
         "owner_character_id",
         "included_prop_ids",
         "included_role_asset_ids",
-        "performance",
+        "actor_profile",
         "body_topology",
     ):
         if field in asset:
@@ -185,13 +185,8 @@ def _catalog_semantics(
     if member is not None:
         for field in (
             "member_type_id",
-            "group_role_type_en",
-            "included_entity_ids",
-            "excluded_speaking_entity_ids",
-            "excluded_dialogue_character_names_en",
             "allowed_member_types_en",
             "variation_profile",
-            "authority",
         ):
             if field in member:
                 result[field] = member[field]
@@ -323,10 +318,12 @@ def build_review_packet(
     parsed: dict[str, Any],
     provisional_plan: dict[str, Any],
     catalog: dict[str, Any],
+    repository_root: Path | None = None,
 ) -> dict[str, Any]:
     """Freeze the final Prompt and selected assets.json semantic rows."""
 
     task_dir = task_dir.expanduser().resolve()
+    repository_root = (repository_root or REPOSITORY_ROOT).expanduser().resolve()
     media_inputs: list[dict[str, Any]] = []
     plan_media = provisional_plan.get("media_bindings")
     if not isinstance(plan_media, list):
@@ -432,7 +429,7 @@ def build_review_packet(
         "final_prompt_sha256": hashlib.sha256(
             parsed["prompt"].encode("utf-8")
         ).hexdigest(),
-        "asset_catalog_sha256": sha256_file(task_dir / ASSET_CATALOG_RELATIVE),
+        "asset_catalog_sha256": sha256_file(repository_root / ASSET_CATALOG_RELATIVE),
         "media_inputs": media_inputs,
         "source_requirements": _owned_requirements(task_dir, parsed),
     }
@@ -776,6 +773,7 @@ def validate_compatibility_review(
     provisional_plan: dict[str, Any],
     catalog: dict[str, Any],
     emit_rework: bool = True,
+    repository_root: Path | None = None,
 ) -> dict[str, Any]:
     """Require a current semantic PASS over Prompt and assets.json."""
 
@@ -785,6 +783,7 @@ def validate_compatibility_review(
         parsed=parsed,
         provisional_plan=provisional_plan,
         catalog=catalog,
+        repository_root=repository_root,
     )
     stored_packet_path = packet_path(task_dir, parsed["segment_id"])
     stored_packet = read_json(stored_packet_path, label="asset compatibility packet")

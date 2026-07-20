@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate voices in ``direct-production-design/assets.json``."""
+"""Validate voices in the repository-owned ``assets/assets.json`` catalog."""
 
 from __future__ import annotations
 
@@ -22,12 +22,13 @@ for script_root in (SCRIPT_ROOT, SHARED_RUNTIME_ROOT):
 from story_video.asset_support import StoryVideoError  # noqa: E402
 from story_video.asset_catalog import (  # noqa: E402
     ASSET_CATALOG_RELATIVE_PATH,
+    REPOSITORY_ROOT,
     load_asset_catalog,
 )
 
 
 class VoiceAuthorityError(StoryVideoError):
-    """Raised when task-local voice evidence is missing or inconsistent."""
+    """Raised when repository-owned voice evidence is missing or inconsistent."""
 
 
 EXPECTED_SAMPLE_RATE_HZ = 48000
@@ -41,14 +42,14 @@ MAX_INTERNAL_WORD_GAP_SECONDS = 0.6
 DURATION_TOLERANCE_SECONDS = 0.02
 
 
-def _catalog_reference_file(task_root: Path, raw_path: Any, label: str) -> Path:
+def _catalog_reference_file(repository_root: Path, raw_path: Any, label: str) -> Path:
     """Resolve a path already admitted by the strict asset-catalog loader."""
 
     if not isinstance(raw_path, str) or not raw_path:
         raise VoiceAuthorityError(f"{label} is missing from the normalized asset catalog.")
     portable = PurePosixPath(raw_path)
     try:
-        resolved = task_root.joinpath(*portable.parts).resolve(strict=True)
+        resolved = repository_root.joinpath(*portable.parts).resolve(strict=True)
     except (FileNotFoundError, OSError) as exc:
         raise VoiceAuthorityError(f"{label} cannot be inspected: {raw_path}") from exc
     if not resolved.is_file():
@@ -204,10 +205,13 @@ def _validate_dynamic_timing(
         )
 
 
-def validate_voice_authority(task_root: Path) -> Dict[str, Any]:
+def validate_voice_authority(
+    task_root: Path, *, repository_root: Path = REPOSITORY_ROOT
+) -> Dict[str, Any]:
     task_root = task_root.expanduser().resolve()
+    repository_root = repository_root.expanduser().resolve()
     try:
-        catalog = load_asset_catalog(task_root)
+        catalog = load_asset_catalog(task_root, repository_root=repository_root)
     except StoryVideoError as exc:
         raise VoiceAuthorityError(str(exc)) from exc
 
@@ -218,7 +222,7 @@ def validate_voice_authority(task_root: Path) -> Dict[str, Any]:
         voice = asset["voice"]
         reference = voice["reference"]
         audio_path = _catalog_reference_file(
-            task_root,
+            repository_root,
             reference.get("path"),
             f"character {asset_id} voice.reference.path",
         )
@@ -278,7 +282,7 @@ def validate_voice_authority(task_root: Path) -> Dict[str, Any]:
 
     return {
         "result": "PASS",
-        "catalog_path": str((task_root / ASSET_CATALOG_RELATIVE_PATH).resolve()),
+        "catalog_path": str((repository_root / ASSET_CATALOG_RELATIVE_PATH).resolve()),
         "speaker_count": len(validated),
         "remote_service_calls": 0,
         "speakers": validated,

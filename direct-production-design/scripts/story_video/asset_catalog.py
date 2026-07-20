@@ -15,14 +15,16 @@ from urllib.parse import urlsplit
 
 from story_video.asset_support import StoryVideoError, require_utf8_text
 from story_video.visual_style_contract import (
-    VISUAL_STYLE_PROFILE,
-    assert_visual_style_contract,
     contains_prohibited_style_shortcut,
 )
 ASSET_CATALOG_FILENAME = "assets.json"
-DEPARTMENT_DIRNAME = "direct-production-design"
-ASSET_MEDIA_RELATIVE_PATH = Path(DEPARTMENT_DIRNAME) / "assets"
-ASSET_CATALOG_RELATIVE_PATH = Path(DEPARTMENT_DIRNAME) / ASSET_CATALOG_FILENAME
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+ASSET_MEDIA_RELATIVE_PATH = Path("assets")
+ASSET_CATALOG_RELATIVE_PATH = ASSET_MEDIA_RELATIVE_PATH / ASSET_CATALOG_FILENAME
+LEGACY_TASK_ASSET_PATHS = (
+    Path("direct-production-design/assets.json"),
+    Path("direct-production-design/assets"),
+)
 ASSET_TYPES = frozenset(
     {
         "character",
@@ -38,14 +40,14 @@ ASSET_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 ROOT_KEYS = frozenset(
     {
         "contract",
-        "visual_style_profile",
-        "visual_style_contract",
         "path_resolution",
-        "cross_segment_policy",
         "assets",
     }
 )
-COMMON_ASSET_KEYS = frozenset({"type", "status", "description_en", "visual"})
+COMMON_ASSET_KEYS = frozenset({"type", "description_en", "visual"})
+ACTOR_PROFILE_KEYS = frozenset(
+    {"name_en", "personality_en", "screen_presence_en", "acting_range_en"}
+)
 BODY_TOPOLOGY_KEYS = frozenset(
     {
         "body_plan_en",
@@ -60,75 +62,50 @@ NON_LIMB_APPENDAGE_KEYS = frozenset({"kind_en", "count"})
 COSTUME_ASSET_KEYS = COMMON_ASSET_KEYS | {
     "character_id",
     "appearance_state_en",
-    "authority",
 }
 LOCATION_MASTER_ASSET_KEYS = COMMON_ASSET_KEYS | {
     "included_prop_ids",
     "included_role_asset_ids",
-    "authority",
 }
 SOUND_ASSET_KEYS = frozenset(
     {
         "type",
-        "status",
         "description_en",
         "sound_role",
         "owner_character_id",
         "audio",
-        "authority",
     }
 )
 ASSET_KEYS_BY_TYPE = {
     # Final-look props and visible thought remain visual-review concerns. The
     # exhaustive model-authored body topology is catalog authority because video
     # generation must preserve it across motion.
-    "character": COMMON_ASSET_KEYS | {"body_topology", "performance", "voice"},
+    "character": COMMON_ASSET_KEYS | {"actor_profile", "body_topology", "voice"},
     "costume": COSTUME_ASSET_KEYS,
     "prop": COMMON_ASSET_KEYS,
     "location_master": LOCATION_MASTER_ASSET_KEYS,
     "sound": SOUND_ASSET_KEYS,
-    "ensemble_roster": frozenset({"type", "status", "description_en", "members"}),
+    "ensemble_roster": frozenset({"type", "description_en", "members"}),
 }
 VISUAL_KEYS = frozenset({"path", "uri"})
 ROSTER_ASSET_KEYS = frozenset({"path", "uri", "subject_count"})
 ROSTER_MEMBER_KEYS = frozenset(
     {
         "member_type_id",
-        "group_role_type_en",
         "roster_asset",
-        "included_entity_ids",
-        "excluded_speaking_entity_ids",
-        "excluded_dialogue_character_names_en",
         "allowed_member_types_en",
         "variation_profile",
-        "authority",
     }
 )
 VARIATION_PROFILE_KEYS = frozenset({"locked_traits_en", "allowed_variation_en"})
-ROSTER_AUTHORITY = "silent_cinematic_role_group_portrait"
 VOICE_KEYS = frozenset({"description_en", "reference"})
 AUDIO_REFERENCE_KEYS = frozenset({"path", "uri"})
-COSTUME_AUTHORITY = "character_costume_and_appearance_state"
-LOCATION_MASTER_AUTHORITY = "scene_cast_location_with_current_props_and_roles"
-SOUND_AUTHORITY = "current_sound_reference"
 SOUND_ROLES = frozenset(
     {"ambience", "foley", "sound_effect", "diegetic_music"}
 )
-CHARACTER_PERFORMANCE_FIELD_ORDER = (
-    "core_desire_en",
-    "core_belief_en",
-    "fear_or_pressure_en",
-    "emotional_arc_en",
-    "attention_logic_en",
-    "listening_behavior_en",
-    "speech_preparation_en",
-    "embodied_acting_en",
-    "settle_behavior_en",
-    "forbidden_performance_en",
-)
-CHARACTER_PERFORMANCE_KEYS = frozenset(CHARACTER_PERFORMANCE_FIELD_ORDER)
-VAGUE_PERFORMANCE_RE = re.compile(
-    r"^(?:none|n/?a|natural|subtle|generic|normal|tbd|to be decided|as appropriate)[.!]?$",
+STORY_BOUND_ACTOR_PROFILE_RE = re.compile(
+    r"\b(?:screenplay|segment|current story|story objective|narrative function|"
+    r"plot event|scene-specific)\b",
     re.IGNORECASE,
 )
 
@@ -143,6 +120,22 @@ FORBIDDEN_TRANSPORT_FIELDS = frozenset(
         "image_tos",
     }
 )
+
+
+def reject_task_local_asset_state(task_root: Path) -> None:
+    """Reject the deleted task-owned asset contract instead of reviving it."""
+
+    root = task_root.expanduser().resolve()
+    stale = [
+        path.as_posix()
+        for path in LEGACY_TASK_ASSET_PATHS
+        if (root / path).exists()
+    ]
+    if stale:
+        raise StoryVideoError(
+            "Task-local production assets are forbidden; remove the obsolete path(s): "
+            + ", ".join(stale)
+        )
 
 
 def _reject_duplicate_object_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -169,7 +162,7 @@ def _load_json(path: Path) -> dict[str, Any]:
         raise StoryVideoError(f"Asset catalog must be valid UTF-8 JSON: {path}") from exc
     if not isinstance(payload, dict):
         raise StoryVideoError(
-            "direct-production-design/assets.json must contain one JSON object."
+            "assets/assets.json must contain one JSON object."
         )
     return payload
 
@@ -192,7 +185,7 @@ def _require_exact_keys(value: Any, expected: frozenset[str], label: str) -> dic
 
 def _reject_transport_fields(
     value: Any,
-    location: str = "direct-production-design/assets.json",
+    location: str = "assets/assets.json",
 ) -> None:
     if isinstance(value, dict):
         for key, nested in value.items():
@@ -211,11 +204,15 @@ def _require_http_uri(value: Any, label: str) -> str:
     parsed = urlsplit(uri)
     if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
         raise StoryVideoError(f"{label} must be an absolute HTTP(S) URI.")
+    if parsed.query or parsed.fragment:
+        raise StoryVideoError(
+            f"{label} must be a persistent unsigned URL without query or fragment."
+        )
     return uri
 
 
 def _require_asset_file(
-    task_root: Path,
+    repository_root: Path,
     asset_dir: Path,
     value: Any,
     label: str,
@@ -226,17 +223,15 @@ def _require_asset_file(
     portable = PurePosixPath(raw)
     if portable.is_absolute() or ".." in portable.parts:
         raise StoryVideoError(
-            f"{label} must be task-root-relative inside "
-            "direct-production-design/assets/."
+            f"{label} must be repository-root-relative inside assets/."
         )
     expected_prefix = ASSET_MEDIA_RELATIVE_PATH.parts
     if portable.parts[: len(expected_prefix)] != expected_prefix:
         raise StoryVideoError(
-            f"{label} must be task-root-relative inside "
-            "direct-production-design/assets/."
+            f"{label} must be repository-root-relative inside assets/."
         )
 
-    declared_path = task_root.joinpath(*portable.parts)
+    declared_path = repository_root.joinpath(*portable.parts)
     try:
         resolved = declared_path.resolve(strict=True)
     except (FileNotFoundError, OSError) as exc:
@@ -245,14 +240,16 @@ def _require_asset_file(
         asset_resolved = asset_dir.resolve(strict=True)
     except (FileNotFoundError, OSError) as exc:
         raise StoryVideoError(f"Missing required asset directory: {asset_dir}") from exc
-    if asset_resolved != task_root and task_root not in asset_resolved.parents:
+    if (
+        asset_resolved != repository_root
+        and repository_root not in asset_resolved.parents
+    ):
         raise StoryVideoError(
-            "task_root/direct-production-design/assets may not resolve outside "
-            "the task root."
+            "repository_root/assets may not resolve outside the repository root."
         )
     if resolved != asset_resolved and asset_resolved not in resolved.parents:
         raise StoryVideoError(
-            f"{label} escapes direct-production-design/assets/ through a path "
+            f"{label} escapes repository-root assets/ through a path "
             f"or symlink: {raw}"
         )
     try:
@@ -321,10 +318,6 @@ def _validate_roster_members(
                 f"ensemble_roster {asset_id} repeats member_type_id {member_type_id}."
             )
         seen_member_types.add(member_type_id)
-        group_role_type = require_utf8_text(
-            member["group_role_type_en"],
-            f"ensemble_roster {asset_id} member {member_type_id} group_role_type_en",
-        )
         roster_asset = _require_exact_keys(
             member["roster_asset"],
             ROSTER_ASSET_KEYS,
@@ -359,46 +352,6 @@ def _validate_roster_members(
             variation["allowed_variation_en"],
             f"ensemble_roster {asset_id} member {member_type_id} allowed_variation_en",
         )
-        included_entity_ids = member["included_entity_ids"]
-        excluded_speaking_entity_ids = member["excluded_speaking_entity_ids"]
-        for values, label in (
-            (included_entity_ids, "included_entity_ids"),
-            (excluded_speaking_entity_ids, "excluded_speaking_entity_ids"),
-        ):
-            if (
-                not isinstance(values, list)
-                or any(not isinstance(value, str) or not value for value in values)
-                or len(values) != len(set(values))
-            ):
-                raise StoryVideoError(
-                    f"ensemble_roster {asset_id} member {member_type_id} {label} "
-                    "must be a unique string array."
-                )
-        if not included_entity_ids:
-            raise StoryVideoError(
-                f"ensemble_roster {asset_id} member {member_type_id} must include "
-                "at least one non-speaking entity."
-            )
-        overlap = set(included_entity_ids) & set(excluded_speaking_entity_ids)
-        if overlap:
-            raise StoryVideoError(
-                f"ensemble_roster {asset_id} member {member_type_id} includes excluded "
-                "speaking entities: " + ", ".join(sorted(overlap))
-            )
-        excluded_dialogue_names = member["excluded_dialogue_character_names_en"]
-        if (
-            not isinstance(excluded_dialogue_names, list)
-            or any(
-                not isinstance(value, str) or not value.strip()
-                for value in excluded_dialogue_names
-            )
-            or len({value.strip().casefold() for value in excluded_dialogue_names})
-            != len(excluded_dialogue_names)
-        ):
-            raise StoryVideoError(
-                f"ensemble_roster {asset_id} member {member_type_id} "
-                "excluded_dialogue_character_names_en must be a unique text array."
-            )
         allowed_member_types = member["allowed_member_types_en"]
         if (
             not isinstance(allowed_member_types, list)
@@ -414,23 +367,10 @@ def _validate_roster_members(
                 f"ensemble_roster {asset_id} member {member_type_id} "
                 "allowed_member_types_en must be a non-empty unique text array."
             )
-        if member.get("authority") != ROSTER_AUTHORITY:
-            raise StoryVideoError(
-                f"ensemble_roster {asset_id} member {member_type_id} authority must be "
-                f"{ROSTER_AUTHORITY}."
-            )
         normalized.append(
             {
                 "member_type_id": member_type_id,
-                "group_role_type_en": group_role_type,
                 "roster_asset": {**visual, "subject_count": subject_count},
-                "included_entity_ids": list(included_entity_ids),
-                "excluded_speaking_entity_ids": list(
-                    excluded_speaking_entity_ids
-                ),
-                "excluded_dialogue_character_names_en": [
-                    value.strip() for value in excluded_dialogue_names
-                ],
                 "allowed_member_types_en": [
                     value.strip() for value in allowed_member_types
                 ],
@@ -438,7 +378,6 @@ def _validate_roster_members(
                     "locked_traits_en": locked_traits,
                     "allowed_variation_en": allowed_variation,
                 },
-                "authority": ROSTER_AUTHORITY,
             }
         )
         visual_evidence.append((visual, resolved))
@@ -496,23 +435,23 @@ def _validate_audio_reference(
     return {"path": audio_path, "uri": uri}, audio_resolved
 
 
-def _validate_character_performance(raw: Any, *, asset_id: str) -> dict[str, str]:
-    """Validate the character as an actor, not merely as a visual identity plate."""
+def _validate_actor_profile(raw: Any, *, asset_id: str) -> dict[str, str]:
+    """Validate a reusable casting-card profile with no story assignment."""
 
     value = _require_exact_keys(
         raw,
-        CHARACTER_PERFORMANCE_KEYS,
-        f"character {asset_id} performance",
+        ACTOR_PROFILE_KEYS,
+        f"character {asset_id} actor_profile",
     )
     normalized: dict[str, str] = {}
-    for field in CHARACTER_PERFORMANCE_FIELD_ORDER:
+    for field in sorted(ACTOR_PROFILE_KEYS):
         text = require_utf8_text(
-            value[field], f"character {asset_id} performance.{field}"
+            value[field], f"character {asset_id} actor_profile.{field}"
         )
-        if len(text) < 12 or VAGUE_PERFORMANCE_RE.fullmatch(text):
+        if STORY_BOUND_ACTOR_PROFILE_RE.search(text):
             raise StoryVideoError(
-                f"character {asset_id} performance.{field} must describe concrete inner "
-                "activity or playable behavior, not a placeholder."
+                f"character {asset_id} actor_profile.{field} must describe the reusable "
+                "actor, not one screenplay assignment."
             )
         normalized[field] = text
     return normalized
@@ -616,31 +555,37 @@ def _validate_body_topology(raw: Any, *, asset_id: str) -> dict[str, Any]:
     }
 
 
-def load_asset_catalog(task_root: Path) -> dict[str, Any]:
-    """Load ``task_root/direct-production-design/assets.json``."""
+def load_asset_catalog(
+    task_root: Path, *, repository_root: Path | None = None
+) -> dict[str, Any]:
+    """Load the repository-owned ``assets/assets.json`` catalog.
+
+    ``task_root`` remains an input only so callers keep validating one concrete
+    production task. Media ownership is deliberately independent of that task.
+    """
 
     task_root = task_root.expanduser().resolve()
-    asset_dir = task_root / ASSET_MEDIA_RELATIVE_PATH
-    catalog_path = task_root / ASSET_CATALOG_RELATIVE_PATH
+    reject_task_local_asset_state(task_root)
+    repository_root = (repository_root or REPOSITORY_ROOT).expanduser().resolve()
+    asset_dir = repository_root / ASSET_MEDIA_RELATIVE_PATH
+    catalog_path = repository_root / ASSET_CATALOG_RELATIVE_PATH
     if not catalog_path.is_file():
         raise StoryVideoError(f"Missing required asset catalog: {catalog_path}")
     if catalog_path.is_symlink():
         raise StoryVideoError(
-            "direct-production-design/assets.json must be a real file, "
+            "assets/assets.json must be a real file, "
             "not a symlink."
         )
 
     payload = _load_json(catalog_path)
     _reject_transport_fields(payload)
     _require_exact_keys(
-        payload, ROOT_KEYS, "direct-production-design/assets.json root"
+        payload, ROOT_KEYS, "assets/assets.json root"
     )
 
     fixed = {
         "contract": "production-design-assets",
-        "visual_style_profile": VISUAL_STYLE_PROFILE,
-        "path_resolution": "task_root_relative",
-        "cross_segment_policy": "narrative_state_through_independent_edits",
+        "path_resolution": "repository_root_relative",
     }
     invalid = [
         key
@@ -649,26 +594,19 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
     ]
     if invalid:
         raise StoryVideoError(
-            "direct-production-design/assets.json has invalid fixed fields: "
+            "assets/assets.json has invalid fixed fields: "
             + ", ".join(invalid)
         )
-    try:
-        style_contract = assert_visual_style_contract(
-            payload["visual_style_contract"],
-            label="direct-production-design/assets.json visual_style_contract",
-        )
-    except ValueError as exc:
-        raise StoryVideoError(str(exc)) from exc
     if contains_prohibited_style_shortcut(payload):
         raise StoryVideoError(
-            "direct-production-design/assets.json contains a prohibited "
+            "assets/assets.json contains a prohibited "
             "brand/IP visual-style shortcut."
         )
 
     raw_assets = payload["assets"]
     if not isinstance(raw_assets, dict) or not raw_assets:
         raise StoryVideoError(
-            "direct-production-design/assets.json assets must be a non-empty "
+            "assets/assets.json assets must be a non-empty "
             "object keyed by ID."
         )
 
@@ -687,14 +625,11 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
             raise StoryVideoError(f"asset {asset_id} has invalid type {asset_type!r}.")
         expected_keys = ASSET_KEYS_BY_TYPE[asset_type]
         value = _require_exact_keys(raw, expected_keys, f"asset {asset_id}")
-        if value["status"] != "ready":
-            raise StoryVideoError(f"asset {asset_id} status must be ready.")
         description = require_utf8_text(
             value["description_en"], f"asset {asset_id} description_en"
         )
         normalized: dict[str, Any] = {
             "type": asset_type,
-            "status": "ready",
             "description_en": description,
         }
         if asset_type == "sound":
@@ -720,14 +655,10 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
                     f"sound {asset_id} must use owner_character_id none; named voice "
                     "authority belongs inside its character record."
                 )
-            if value["authority"] != SOUND_AUTHORITY:
-                raise StoryVideoError(
-                    f"sound {asset_id} authority must be {SOUND_AUTHORITY}."
-                )
             audio, audio_resolved = _validate_audio_reference(
                 value["audio"],
                 asset_id=asset_id,
-                task_root=task_root,
+                task_root=repository_root,
                 asset_dir=asset_dir,
             )
             if audio_resolved in audio_paths:
@@ -747,7 +678,6 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
                     "sound_role": sound_role,
                     "owner_character_id": owner_character_id,
                     "audio": audio,
-                    "authority": SOUND_AUTHORITY,
                 }
             )
             assets[asset_id] = normalized
@@ -756,7 +686,7 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
             members, roster_visuals = _validate_roster_members(
                 value["members"],
                 asset_id=asset_id,
-                task_root=task_root,
+                task_root=repository_root,
                 asset_dir=asset_dir,
             )
             for member, (visual, visual_resolved) in zip(members, roster_visuals):
@@ -780,7 +710,7 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
         visual, visual_resolved = _validate_visual(
             value["visual"],
             asset_id=asset_id,
-            task_root=task_root,
+            task_root=repository_root,
             asset_dir=asset_dir,
         )
         if visual_resolved in visual_paths:
@@ -807,15 +737,10 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
                 value["appearance_state_en"],
                 f"costume {asset_id} appearance_state_en",
             )
-            if value["authority"] != COSTUME_AUTHORITY:
-                raise StoryVideoError(
-                    f"costume {asset_id} authority must be {COSTUME_AUTHORITY}."
-                )
             normalized.update(
                 {
                     "character_id": character_id,
                     "appearance_state_en": appearance_state,
-                    "authority": COSTUME_AUTHORITY,
                 }
             )
         if asset_type == "location_master":
@@ -839,32 +764,29 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
                     f"location_master {asset_id} included_role_asset_ids must be a "
                     "non-empty unique string array."
                 )
-            if value["authority"] != LOCATION_MASTER_AUTHORITY:
-                raise StoryVideoError(
-                    f"location_master {asset_id} authority must be {LOCATION_MASTER_AUTHORITY}."
-                )
             normalized.update(
                 {
                     "included_prop_ids": list(included_prop_ids),
                     "included_role_asset_ids": list(included_role_asset_ids),
-                    "authority": LOCATION_MASTER_AUTHORITY,
                 }
             )
         if asset_type == "character":
+            normalized["actor_profile"] = _validate_actor_profile(
+                value["actor_profile"], asset_id=asset_id
+            )
             normalized["body_topology"] = _validate_body_topology(
                 value["body_topology"], asset_id=asset_id
-            )
-            normalized["performance"] = _validate_character_performance(
-                value["performance"], asset_id=asset_id
             )
         if asset_type == "character":
             voice = _validate_voice(
                 value["voice"],
                 asset_id=asset_id,
-                task_root=task_root,
+                task_root=repository_root,
                 asset_dir=asset_dir,
             )
-            audio_path = (task_root / voice["reference"]["path"]).resolve(strict=True)
+            audio_path = (
+                repository_root / voice["reference"]["path"]
+            ).resolve(strict=True)
             audio_uri = voice["reference"]["uri"]
             if audio_path in audio_paths:
                 raise StoryVideoError(
@@ -914,9 +836,6 @@ def load_asset_catalog(task_root: Path) -> dict[str, Any]:
 
     return {
         "contract": "production-design-assets",
-        "visual_style_profile": VISUAL_STYLE_PROFILE,
-        "visual_style_contract": style_contract,
-        "path_resolution": "task_root_relative",
-        "cross_segment_policy": "narrative_state_through_independent_edits",
+        "path_resolution": "repository_root_relative",
         "assets": assets,
     }

@@ -1,9 +1,7 @@
-"""Parse and validate the effect-first Seedance Segment screenplay contract."""
+"""Parse and validate the authored, all-table cinematic screenplay contract."""
 
 from __future__ import annotations
 
-from copy import deepcopy
-import json
 from pathlib import Path
 import re
 from typing import Any
@@ -17,64 +15,121 @@ from story_video.runtime_support import (
 
 
 SCREENPLAY_PROMPT_FILENAME = "story_to_screenplay_gen.md"
-TITLE_RE = re.compile(r"^# Seedance Screenplay: (.+)$")
-META_RE = re.compile(
-    r"^- (Target language|Target age band|Seedance mapping|Segment duration policy|"
-    r"Segment boundary policy):\s*(.+)$"
-)
-SEGMENT_RE = re.compile(r"^## Segment ([1-9][0-9]*)$")
-SLUGLINE_RE = re.compile(r"^\*\*((?:INT|EXT)\. .+ - .+)\*\*$")
-BOLD_RE = re.compile(r"^\*\*(.+)\*\*$")
-PLAN_FIELD_RE = re.compile(r"^- `([a-z][a-z0-9_]*)`:\s*(.+)$")
+TITLE_RE = re.compile(r"^# Cinematic Widescreen Production Script: (.+)$")
+SCENE_UNIT_RE = re.compile(r"^## Scene Unit ([1-9][0-9]*) — (.+)$")
 SCENE_ID_RE = re.compile(r"^scene-[0-9]{3,}$")
 SEGMENT_ID_RE = re.compile(r"^segment-[0-9]{3,}$")
 STATE_ID_RE = re.compile(r"^state-[0-9]{3,}$")
 BOUNDARY_ID_RE = re.compile(r"^boundary-[0-9]{3,}$")
 ENVIRONMENT_ID_RE = re.compile(r"^environment-[0-9]{3,}$")
+ENTITY_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+ACTION_ID_RE = re.compile(r"^A-[0-9]{3,}$")
+LINE_ID_RE = re.compile(r"^L-[0-9]{3,}$")
+BEAT_ID_RE = re.compile(r"^BEAT-[A-Za-z0-9_.-]+$")
+SLUGLINE_RE = re.compile(r"^(INT|EXT)\. .+ - .+$")
 WORD_RE = re.compile(r"[A-Za-z0-9]+(?:['’][A-Za-z0-9]+)*")
+GAZE_RE = re.compile(
+    r"^([a-z0-9]+(?:-[a-z0-9]+)*) -> ([^()]+?) "
+    r"\(facing=(.+?), gaze=(.+)\)$"
+)
+DIALOGUE_RE = re.compile(
+    r'^((?:L)-[0-9]{3,}); speaker=([a-z0-9]+(?:-[a-z0-9]+)*); '
+    r'gate=([^;]+); delivery=([^;]+); text="([^"]+)"$'
+)
+AUDIO_RE = re.compile(
+    r"^(BGM (?:ENTERS|EVOLVES|STOPS|STING)|SFX|AMBIENCE|SILENCE):\s*(.+)$"
+)
 
-# Shared deterministic timing/structure limits. The screenplay validator and the
-# screenplay-owned audio projection must use the same values.
 DIALOGUE_WORDS_PER_SECOND = 2.6
 DIALOGUE_TURN_ALLOWANCE_SECONDS = 0.25
 MINIMUM_ACTION_REACTION_SECONDS = 1.0
-MINIMUM_SEGMENT_BLOCK_COUNT = 3
 DIALOGUE_OCCUPANCY_LIMITS = {
     "action_led": 0.45,
     "mixed_dialogue_action": 0.60,
     "dialogue_led": 0.72,
 }
 
-META_ORDER = (
-    "Target language",
-    "Target age band",
-    "Seedance mapping",
-    "Segment duration policy",
-    "Segment boundary policy",
+PRODUCTION_INFORMATION_FIELDS = (
+    "Production Type",
+    "Genre",
+    "Estimated Runtime Seconds",
+    "Target Language",
+    "Target Age Band",
+    "Educational Theme",
+    "Story Premise",
+    "Dramatic Strategy",
+    "Safety and Culture",
+    "Opening Event",
+    "Ending Event and Obligation",
 )
 CHARACTER_TABLE_COLUMNS = (
+    "Entity ID",
     "Character",
     "Story Role",
     "Narrative Function",
-    "Narration Eligibility",
-    "Narration Scope",
+    "Kind",
+    "Recurring",
+    "Group Role",
+    "Member Types",
+    "Narration",
     "Description",
 )
-CHARACTER_STORY_ROLES = {"lead", "supporting", "npc"}
-NARRATION_ELIGIBILITIES = {"allowed", "conditional", "not_allowed"}
+SCENE_UNIT_INFORMATION_FIELDS = (
+    "Segment ID",
+    "Scene ID",
+    "Slugline",
+    "Duration Seconds",
+    "Workload",
+    "Environment",
+    "Dramatic Purpose",
+    "Start State",
+    "End State",
+    "Incoming Boundary",
+)
+SHOT_EXECUTION_COLUMNS = (
+    "Shot ID",
+    "Beat ID",
+    "Scale / View",
+    "Duration Seconds",
+    "Performers",
+    "Dramatic Change",
+    "Objective / Tactic",
+    "Visual Action",
+    "Important Reaction",
+    "Blocking / Movement",
+    "Gaze / Addressee",
+    "Completion State",
+    "Audience Focus",
+    "BGM / SFX / Ambience",
+    "Dialogue",
+)
+CHARACTER_STAGING_COLUMNS = (
+    "Entity ID",
+    "Presence",
+    "Appearance",
+    "Trigger",
+    "Entry Path / Opening Position",
+    "First Visible Shot",
+    "First Visible Moment",
+    "Landing Shot",
+    "Landing Moment / Result",
+    "Speaks",
+    "Lines",
+    "State Change",
+    "Action Shots",
+)
 ENVIRONMENT_TABLE_COLUMNS = (
     "Environment ID",
     "Logical Environment",
-    "Scene IDs JSON",
+    "Scene IDs",
     "INT/EXT",
     "Time Context",
     "Environment Facts",
     "Story Function",
 )
-ENVIRONMENT_KINDS = {"INT", "EXT", "MIXED"}
 SCENE_TABLE_COLUMNS = (
     "Scene ID",
-    "Segment IDs JSON",
+    "Segment IDs",
     "Primary Time",
     "Primary Place",
     "Narrative Event",
@@ -83,27 +138,22 @@ SCENE_TABLE_COLUMNS = (
     "Continuity Reference Segment",
     "Continuity Reference Reason",
 )
-SCENE_ENTRY_BOUNDARIES = {
-    "opening",
-    "time_change",
-    "place_change",
-    "time_and_place_change",
-    "narrative_event_change",
-}
+SCENE_CONTRACT_TABLE_COLUMNS = (
+    "Scene ID",
+    "Purpose",
+    "Character Objective",
+    "Obstacle",
+    "Power Relationship",
+    "Turning Point",
+    "Outcome",
+    "Spatial Progression",
+    "Exit Impulse",
+)
 CONTINUITY_STATE_TABLE_COLUMNS = (
     "State ID",
-    "Character Identity",
-    "Character Relationships",
-    "Costume and Appearance State",
-    "Character Knowledge",
-    "Emotional State",
-    "Injury and Body State",
-    "Prop Ownership",
-    "Prop State",
-    "Location Facts",
-    "Time Order",
-    "Event Causality",
-    "Story Logic",
+    "Parent State",
+    "Changed Facts",
+    "Change Reason",
 )
 CONTINUITY_BOUNDARY_TABLE_COLUMNS = (
     "Boundary ID",
@@ -111,70 +161,38 @@ CONTINUITY_BOUNDARY_TABLE_COLUMNS = (
     "To Segment",
     "From State",
     "To State",
-    "Anchor Policy JSON",
+    "Handoff",
+    "Transition",
+    "Dramatic Reason",
+    "Audio Handoff",
+    "Continuity Handoff",
 )
-STATE_REF_KEYS = frozenset({"state_ref"})
-ANCHOR_POLICY_KEYS = frozenset({"default", "overrides"})
-ANCHOR_POLICY_DEFAULT_KEYS = frozenset({"status", "reason_en"})
-ANCHOR_POLICY_OVERRIDE_KEYS = frozenset({"status", "reason_en"})
-SCREENPLAY_SEGMENT_FIELDS = (
-    "segment_id",
-    "scene_id",
-    "estimated_duration_seconds",
-    "dramatic_workload",
-    "location_time_environment_en",
-    "characters_json",
-    "narrative_purpose_en",
-    "scene_dramatic_contract_json",
-    "dramatic_beats_json",
-    "start_state_json",
-    "end_state_json",
-    "transition_design_json",
-    "incoming_visual_requirement",
-)
-SCENE_DRAMATIC_FIELDS = (
-    "scene_id",
-    "scene_purpose",
-    "character_objective",
-    "obstacle",
-    "power_relationship",
-    "turning_point",
-    "outcome",
-    "visual_progression",
-    "exit_impulse",
-)
-DRAMATIC_BEAT_FIELDS = (
-    "beat_id",
-    "narrative_change",
-    "active_character",
-    "physical_objective",
-    "visible_action",
-    "important_reaction",
-    "spatial_change",
-    "dialogue_or_sound",
-    "entry_state",
-    "exit_state",
-    "action_subject",
-    "reaction_subject",
-    "supporting_group",
-    "atmosphere_presence",
-    "visual_focus",
-    "block_indexes",
-)
-DRAMATIC_BEAT_ID_RE = re.compile(r"^BEAT-[A-Za-z0-9_.-]+$")
-STAGE_TABLEAU_RISK_RE = re.compile(
-    r"\b(?:all\s+(?:the\s+)?(?:animals|characters|people|villagers|students|guests|"
-    r"workers|soldiers|courtiers)|everyone|the\s+(?:animals|characters|group|cast|crowd))\b"
-    r"[^.!?]{0,100}\b(?:stand|stands|stood|standing|line\s+up|lined\s+up|semicircle)\b|"
-    r"\b(?:take|takes|took)\s+turns?\s+(?:speaking|talking|answering)\b|"
-    r"\b(?:face|faces|facing|look|looks|looking)\s+(?:at|toward)?\s*(?:the\s+)?camera\b",
-    re.I,
-)
-INCOMING_VISUAL_REQUIREMENTS = {
-    "independent",
-    "state_match",
-    "continuous_motion",
+
+SCALE_VIEWS = {
+    "establishing",
+    "wide",
+    "medium",
+    "close_up",
+    "extreme_close_up",
+    "insert",
+    "reaction",
+    "pov",
 }
+CHARACTER_STORY_ROLES = {"lead", "supporting", "npc"}
+NARRATION_ELIGIBILITIES = {"allowed", "conditional", "not_allowed"}
+ENTITY_KINDS = {"individual", "anonymous_ensemble"}
+PRESENCE_MODES = {"on_screen", "off_screen", "voice_over"}
+APPEARANCE_MODES = {"present_at_open", "enters", "not_visible"}
+DIALOGUE_ADDRESSEE_SPECIALS = {"self", "narration"}
+ENVIRONMENT_KINDS = {"INT", "EXT", "MIXED"}
+SCENE_ENTRY_BOUNDARIES = {
+    "opening",
+    "time_change",
+    "place_change",
+    "time_and_place_change",
+    "narrative_event_change",
+}
+INCOMING_VISUAL_REQUIREMENTS = {"independent", "state_match", "continuous_motion"}
 TRANSITION_DESIGN_TYPES = {
     "hard_cut",
     "action_cut",
@@ -192,50 +210,15 @@ TRANSITION_DESIGN_TYPES = {
     "environmental_transition",
     "final_end",
 }
-TRANSITION_DESIGN_FIELDS = (
-    "type",
-    "reason_en",
-    "outgoing_visible_en",
-    "outgoing_audio_en",
-    "incoming_visible_en",
-    "incoming_audio_en",
-    "narrative_link_en",
-    "action_link_en",
-    "spatial_link_en",
-    "sound_link_en",
+STAGE_TABLEAU_RISK_RE = re.compile(
+    r"\b(?:all\s+(?:the\s+)?(?:animals|characters|people|villagers|students|guests|"
+    r"workers|soldiers|courtiers)|everyone|the\s+(?:animals|characters|group|cast|crowd))\b"
+    r"[^.!?]{0,100}\b(?:stand|stands|stood|standing|line\s+up|lined\s+up|semicircle)\b|"
+    r"\b(?:take|takes|took)\s+turns?\s+(?:speaking|talking|answering)\b|"
+    r"\b(?:face|faces|facing|look|looks|looking)\s+(?:at|toward)?\s*(?:the\s+)?camera\b",
+    re.I,
 )
-TRANSITION_DESIGN_KEYS = frozenset(TRANSITION_DESIGN_FIELDS)
-CONTINUITY_CATEGORIES = (
-    "character_identity",
-    "character_relationships",
-    "costume_and_appearance_state",
-    "character_knowledge",
-    "emotional_state",
-    "injury_and_body_state",
-    "prop_ownership",
-    "prop_state",
-    "location_facts",
-    "time_order",
-    "event_causality",
-    "story_logic",
-)
-CONTINUITY_ANCHOR_STATUSES = {
-    "preserve",
-    "evolve",
-    "intentional_change",
-    "not_applicable",
-}
-CONTINUITY_ANCHOR_FIELDS = (
-    "category",
-    "status",
-    "from_en",
-    "to_en",
-    "reason_en",
-)
-CONTINUITY_ANCHOR_KEYS = frozenset(CONTINUITY_ANCHOR_FIELDS)
 FORBIDDEN_CROSS_CLIP_DEPENDENCY_RE = re.compile(
-    r"\b(?:previous|predecessor)\s+(?:last|final)\s+frame\b|"
-    r"\b(?:previous|predecessor)\s+(?:full\s+)?video\b|"
     r"\b(?:dialogue|spoken\s+line|lip\s*sync|native\s+sound)\s+"
     r"(?:continues|carries|bridges|crosses|spans)\b|"
     r"\b(?:continue|carry|bridge|split)\s+(?:the\s+)?"
@@ -246,10 +229,9 @@ INHERITED_VISUAL_PHASE_RE = re.compile(
     r"\b(?:continue|continues|continued|continuing|resume|resumes|inherit|inherits|"
     r"preserve|preserves|match|matches)\b[^.]{0,100}\b"
     r"(?:motion|movement|action\s+phase|body\s+phase|pose|position|facing|"
-    r"screen\s+direction|eyeline|blocking|camera\s+(?:move|motion|phase)|"
-    r"performance\s+phase)\b|"
+    r"screen\s+direction|eyeline|blocking|performance\s+phase)\b|"
     r"\b(?:same|exact|unfinished|inherited)\b[^.]{0,80}\b"
-    r"(?:motion|movement|pose|position|facing|blocking|camera|performance\s+phase)\b",
+    r"(?:motion|movement|pose|position|facing|blocking|performance\s+phase)\b",
     re.I,
 )
 
@@ -260,9 +242,37 @@ def fixed_screenplay_prompt() -> tuple[Path, str]:
         prompt = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise StoryVideoError(f"Cannot read fixed Screenplay Prompt: {path}") from exc
-    if "# Seedance-Native Screenplay Generation Prompt" not in prompt:
+    if "# Cinematic Widescreen Production Script Prompt" not in prompt:
         raise StoryVideoError(f"Invalid fixed Screenplay Prompt: {path}")
     return path, prompt
+
+
+def validate_dialogue_occupancy(
+    *,
+    segment_id: str,
+    dramatic_workload: str,
+    duration_seconds: float,
+    block_windows: list[dict[str, Any]],
+) -> tuple[float, float]:
+    """Validate timing evidence without creating or filling an audio artifact."""
+
+    if dramatic_workload not in DIALOGUE_OCCUPANCY_LIMITS:
+        raise StoryVideoError(f"{segment_id} has an invalid dramatic workload")
+    if duration_seconds <= 0:
+        raise StoryVideoError(f"{segment_id} duration must be positive")
+    dialogue_seconds = sum(
+        float(item["end_seconds"]) - float(item["start_seconds"])
+        for item in block_windows
+        if item.get("block_type") == "dialogue"
+    )
+    occupancy = dialogue_seconds / duration_seconds
+    limit = DIALOGUE_OCCUPANCY_LIMITS[dramatic_workload]
+    if occupancy > limit + 1e-9:
+        raise StoryVideoError(
+            f"{segment_id} dialogue occupancy {occupancy:.1%} exceeds the "
+            f"{limit:.0%} {dramatic_workload} limit"
+        )
+    return occupancy, limit
 
 
 def _next_nonempty(lines: list[str], index: int) -> int:
@@ -271,19 +281,24 @@ def _next_nonempty(lines: list[str], index: int) -> int:
     return index
 
 
-def _paragraph(lines: list[str], index: int) -> tuple[str, int]:
-    chunks: list[str] = []
-    while index < len(lines):
-        line = lines[index].strip()
-        if not line:
-            break
-        if line.startswith("## ") or BOLD_RE.fullmatch(line):
-            break
-        chunks.append(line)
-        index += 1
-    if not chunks:
-        raise StoryVideoError("screenplay.md contains an empty action/dialogue paragraph")
-    return " ".join(chunks), index
+def _concrete(value: Any, *, allow_none: bool = False) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip().casefold()
+    if allow_none and normalized == "none":
+        return True
+    if normalized in {"", "none", "n/a", "na", "same", "consistent", "tbd"}:
+        return False
+    return len(WORD_RE.findall(value)) >= 3
+
+
+def _present(value: Any, *, allow_none: bool = False) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip().casefold()
+    if allow_none and normalized == "none":
+        return True
+    return normalized not in {"", "none", "n/a", "na", "same", "consistent", "tbd"}
 
 
 def _table_cells(line: str, *, label: str) -> list[str]:
@@ -296,11 +311,7 @@ def _table_cells(line: str, *, label: str) -> list[str]:
     cursor = 0
     while cursor < len(body):
         character = body[cursor]
-        if (
-            character == "\\"
-            and cursor + 1 < len(body)
-            and body[cursor + 1] in {"\\", "|"}
-        ):
+        if character == "\\" and cursor + 1 < len(body) and body[cursor + 1] in {"\\", "|"}:
             current.append(body[cursor + 1])
             cursor += 2
             continue
@@ -340,13 +351,11 @@ def _parse_table(
         if not stripped:
             index += 1
             break
-        if stripped.startswith("## "):
+        if stripped.startswith("#"):
             break
         cells = _table_cells(lines[index], label=label)
-        if len(cells) != len(columns):
-            raise StoryVideoError(f"{label} row has the wrong column count")
-        if any(not cell for cell in cells):
-            raise StoryVideoError(f"{label} cells must not be empty")
+        if len(cells) != len(columns) or any(not cell for cell in cells):
+            raise StoryVideoError(f"{label} contains an invalid row")
         rows.append(dict(zip(columns, cells)))
         index += 1
     if not rows and not allow_empty:
@@ -354,226 +363,410 @@ def _parse_table(
     return rows, index
 
 
-def _json_value(raw: str, *, segment_id: int, field: str) -> Any:
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise StoryVideoError(
-            f"screenplay.md Segment {segment_id} `{field}` must be one-line JSON: {exc.msg}"
-        ) from exc
+def _parse_field_table(
+    lines: list[str], index: int, fields: tuple[str, ...], *, label: str
+) -> tuple[dict[str, str], int]:
+    rows, index = _parse_table(
+        lines, index, columns=("Field", "Value"), label=label
+    )
+    actual = [row["Field"] for row in rows]
+    if tuple(actual) != fields:
+        raise StoryVideoError(f"{label} must use the exact ordered Field rows")
+    return {
+        row["Field"]: require_utf8_text(row["Value"], f"{label} {row['Field']}")
+        for row in rows
+    }, index
 
 
-def _parse_story_plan(
-    lines: list[str], index: int, segment_id: int
-) -> tuple[dict[str, Any], int]:
-    result: dict[str, Any] = {}
-    for expected in SCREENPLAY_SEGMENT_FIELDS:
-        index = _next_nonempty(lines, index)
-        if index >= len(lines):
-            raise StoryVideoError(
-                f"screenplay.md Segment {segment_id} is missing `{expected}`"
-            )
-        match = PLAN_FIELD_RE.fullmatch(lines[index].strip())
-        if not match or match.group(1) != expected:
-            actual = match.group(1) if match else lines[index].strip()
-            raise StoryVideoError(
-                f"screenplay.md Segment {segment_id} expected `{expected}` before `{actual}`"
-            )
-        raw = require_utf8_text(match.group(2), f"Segment {segment_id} {expected}")
-        if expected == "estimated_duration_seconds":
-            if not raw.isdigit():
-                raise StoryVideoError(
-                    f"screenplay.md Segment {segment_id} duration must be an integer"
-                )
-            value: Any = int(raw)
-        elif expected.endswith("_json"):
-            value = _json_value(raw, segment_id=segment_id, field=expected)
-        else:
-            value = raw
-        result[expected] = value
-        index += 1
-    return result, index
-
-
-def _parse_segment_content(
-    lines: list[str], index: int, characters: dict[str, str]
-) -> tuple[list[dict[str, Any]], int]:
-    blocks: list[dict[str, Any]] = []
-    while True:
-        index = _next_nonempty(lines, index)
-        if index >= len(lines) or SEGMENT_RE.fullmatch(lines[index].strip()):
-            break
-        line = lines[index].strip()
-        speaker_match = BOLD_RE.fullmatch(line)
-        if speaker_match:
-            raw_speaker = speaker_match.group(1).strip()
-            speaker_mode_match = re.search(r"\s+\((V\.O\.|O\.S\.)\)$", raw_speaker, re.I)
-            normalized = re.sub(
-                r"\s+\((?:V\.O\.|O\.S\.)\)$", "", raw_speaker, flags=re.I
-            ).strip()
-            display = characters.get(normalized.casefold(), "")
-            if not display:
-                raise StoryVideoError(
-                    f"screenplay.md speaker '{raw_speaker}' is not declared in the Characters table"
-                )
-            index = _next_nonempty(lines, index + 1)
-            delivery: str | None = None
-            if index < len(lines) and re.fullmatch(r"\(.+\)", lines[index].strip()):
-                delivery = lines[index].strip()[1:-1].strip()
-                index = _next_nonempty(lines, index + 1)
-            spoken, index = _paragraph(lines, index)
-            blocks.append(
-                {
-                    "type": "dialogue",
-                    "speaker_en": display,
-                    "speaker_cue_en": raw_speaker,
-                    "speaker_mode": (
-                        speaker_mode_match.group(1).upper() if speaker_mode_match else None
-                    ),
-                    "delivery_en": delivery,
-                    "spoken_text_en": spoken,
-                }
-            )
-        else:
-            action, index = _paragraph(lines, index)
-            blocks.append({"type": "action", "text_en": action})
-    return blocks, index
-
-
-def _expect_section(lines: list[str], index: int, heading: str) -> int:
+def _expect_heading(lines: list[str], index: int, heading: str) -> int:
     index = _next_nonempty(lines, index)
     if index >= len(lines) or lines[index].strip() != heading:
         raise StoryVideoError(f"screenplay.md must declare {heading}")
     return index + 1
 
 
-def _parse_characters_header(
-    lines: list[str], index: int
-) -> tuple[list[dict[str, str]], dict[str, str], int]:
-    rows, index = _parse_table(
-        lines,
-        index,
-        columns=CHARACTER_TABLE_COLUMNS,
-        label="Characters table",
-    )
-    characters: list[dict[str, str]] = []
-    character_map: dict[str, str] = {}
-    for row_index, row in enumerate(rows, start=1):
-        name = require_utf8_text(row["Character"], f"Characters row {row_index}")
-        folded = name.casefold()
-        if folded in character_map:
-            raise StoryVideoError(f"screenplay.md repeats character {name}")
-        character_map[folded] = name
-        characters.append(
-            {
-                "name_en": name,
-                "story_role": row["Story Role"],
-                "narrative_function_en": row["Narrative Function"],
-                "narration_eligibility": row["Narration Eligibility"],
-                "narration_scope_en": row["Narration Scope"],
-                "description_en": row["Description"],
-            }
+def _ids(
+    value: str,
+    pattern: re.Pattern[str],
+    *,
+    label: str,
+    allow_none: bool = False,
+) -> list[str]:
+    if value == "none" and allow_none:
+        return []
+    result = [item.strip() for item in value.split(",")]
+    if (
+        not result
+        or any(not pattern.fullmatch(item) for item in result)
+        or len(result) != len(set(result))
+    ):
+        raise StoryVideoError(f"{label} contains invalid or repeated IDs")
+    return result
+
+
+def _yes_no(value: str, *, label: str) -> bool:
+    if value not in {"yes", "no"}:
+        raise StoryVideoError(f"{label} must be yes or no")
+    return value == "yes"
+
+
+def _positive_number(value: str, *, label: str) -> float:
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9])?", value):
+        raise StoryVideoError(f"{label} must be a positive number with at most one decimal")
+    result = float(value)
+    if result <= 0:
+        raise StoryVideoError(f"{label} must be positive")
+    return result
+
+
+def _timed_moment(value: str, *, label: str) -> tuple[float, str]:
+    match = re.fullmatch(r"t=([0-9]+(?:\.[0-9])?)s:\s*(.+)", value)
+    if not match or not _concrete(match.group(2)):
+        raise StoryVideoError(
+            f"{label} must use 't=<seconds>s: <observable event>'"
         )
-    return characters, character_map, index
+    return float(match.group(1)), match.group(2)
 
 
-def _parse_environments_header(
-    lines: list[str], index: int
-) -> tuple[list[dict[str, Any]], int]:
-    rows, index = _parse_table(
-        lines,
-        index,
-        columns=ENVIRONMENT_TABLE_COLUMNS,
-        label="Environments table",
-    )
-    environments: list[dict[str, Any]] = []
-    for row_index, row in enumerate(rows, start=1):
-        try:
-            scene_ids = json.loads(row["Scene IDs JSON"])
-        except json.JSONDecodeError as exc:
+def _split_br(value: str) -> list[str]:
+    return [item.strip() for item in re.split(r"\s*<br\s*/?>\s*", value) if item.strip()]
+
+
+def _parse_gaze(value: str, *, label: str) -> dict[str, dict[str, str]]:
+    if value == "none":
+        return {}
+    result: dict[str, dict[str, str]] = {}
+    for item in _split_br(value):
+        match = GAZE_RE.fullmatch(item)
+        if not match:
             raise StoryVideoError(
-                f"Environments row {row_index} Scene IDs JSON is invalid"
-            ) from exc
-        environments.append(
+                f"{label} must use '<entity> -> <target> (facing=..., gaze=...)'"
+            )
+        source, target, facing, gaze = (part.strip() for part in match.groups())
+        if source in result:
+            raise StoryVideoError(f"{label} repeats gaze authority for {source}")
+        if not _concrete(facing) or not _concrete(gaze):
+            if not (facing == "not_visible" and gaze == "not_visible"):
+                raise StoryVideoError(f"{label} requires concrete facing and gaze")
+        if re.search(r"\bcamera\b", target + " " + facing + " " + gaze, re.I):
+            raise StoryVideoError(f"{label} may not address the camera")
+        result[source] = {"target": target, "facing": facing, "gaze": gaze}
+    return result
+
+
+def _parse_audio(value: str, *, label: str) -> list[dict[str, str]]:
+    if value == "none":
+        return []
+    result: list[dict[str, str]] = []
+    for item in _split_br(value):
+        match = AUDIO_RE.fullmatch(item)
+        if not match or not _concrete(match.group(2)):
+            raise StoryVideoError(f"{label} contains an invalid or generic audio cue")
+        result.append({"type": match.group(1), "description_en": match.group(2)})
+    return result
+
+
+def _parse_dialogue(value: str, *, label: str) -> dict[str, str] | None:
+    if value == "none":
+        return None
+    match = DIALOGUE_RE.fullmatch(value)
+    if not match:
+        raise StoryVideoError(f"{label} does not use the exact Dialogue syntax")
+    line_id, speaker, gate, delivery, spoken = (part.strip() for part in match.groups())
+    if not _concrete(gate) or not _present(spoken):
+        raise StoryVideoError(f"{label} requires a concrete gate and exact spoken text")
+    if delivery != "none" and not _present(delivery):
+        raise StoryVideoError(f"{label} Delivery must be concrete or none")
+    return {
+        "line_id": line_id,
+        "speaker_entity_id": speaker,
+        "gate_en": gate,
+        "delivery_en": delivery,
+        "spoken_text_en": spoken,
+    }
+
+
+def _parse_shot_rows(
+    rows: list[dict[str, str]], *, label: str
+) -> list[dict[str, Any]]:
+    shots: list[dict[str, Any]] = []
+    for row in rows:
+        shot_id = row["Shot ID"]
+        if not ACTION_ID_RE.fullmatch(shot_id):
+            raise StoryVideoError(f"{label} has an invalid Shot ID")
+        scale = row["Scale / View"]
+        if scale not in SCALE_VIEWS:
+            raise StoryVideoError(f"{shot_id} has an invalid Scale / View")
+        performers = _ids(
+            row["Performers"], ENTITY_ID_RE, label=f"{shot_id} Performers", allow_none=True
+        )
+        if any(
+            not _concrete(row[field], allow_none=field == "Important Reaction")
+            for field in (
+                "Dramatic Change",
+                "Objective / Tactic",
+                "Visual Action",
+                "Important Reaction",
+                "Blocking / Movement",
+                "Audience Focus",
+            )
+        ):
+            raise StoryVideoError(f"{shot_id} contains missing or generic dramatic content")
+        if performers and row["Blocking / Movement"] == "none":
+            raise StoryVideoError(f"{shot_id} performers require explicit Blocking / Movement")
+        completion = row["Completion State"]
+        completion_match = re.fullmatch(r"(completed|open):\s*(.+)", completion)
+        if not completion_match or not _concrete(completion_match.group(2)):
+            raise StoryVideoError(f"{shot_id} has an invalid Completion State")
+        beat_id = row["Beat ID"]
+        if not BEAT_ID_RE.fullmatch(beat_id):
+            raise StoryVideoError(f"{shot_id} has an invalid Beat ID")
+        shots.append(
             {
-                "environment_id": row["Environment ID"],
-                "logical_name_en": row["Logical Environment"],
-                "scene_ids_json": scene_ids,
-                "int_ext": row["INT/EXT"],
-                "time_context_en": row["Time Context"],
-                "environment_facts_en": row["Environment Facts"],
-                "story_function_en": row["Story Function"],
+                "shot_id": shot_id,
+                "beat_id": beat_id,
+                "scale_view": scale,
+                "duration_seconds": _positive_number(
+                    row["Duration Seconds"], label=f"{shot_id} Duration Seconds"
+                ),
+                "performer_ids": performers,
+                "dramatic_change_en": row["Dramatic Change"],
+                "objective_tactic_en": row["Objective / Tactic"],
+                "visual_action_en": row["Visual Action"],
+                "important_reaction_en": row["Important Reaction"],
+                "blocking_movement_en": row["Blocking / Movement"],
+                "gaze_relations": _parse_gaze(
+                    row["Gaze / Addressee"], label=f"{shot_id} Gaze / Addressee"
+                ),
+                "completion_mode": completion_match.group(1),
+                "completion_state_en": completion,
+                "audience_focus_en": row["Audience Focus"],
+                "audio_cues": _parse_audio(
+                    row["BGM / SFX / Ambience"],
+                    label=f"{shot_id} BGM / SFX / Ambience",
+                ),
+                "audio_cell_en": row["BGM / SFX / Ambience"],
+                "dialogue": _parse_dialogue(
+                    row["Dialogue"], label=f"{shot_id} Dialogue"
+                ),
             }
         )
-    return environments, index
+    return shots
 
 
-def _parse_scenes_header(
-    lines: list[str], index: int
-) -> tuple[list[dict[str, Any]], int]:
+def parse_screenplay_markdown(text: str) -> dict[str, Any]:
+    if "```json" in text.casefold() or "_json" in text or "{" in text or "}" in text:
+        raise StoryVideoError(
+            "screenplay.md must contain Markdown tables only, with no embedded JSON"
+        )
+    lines = text.lstrip("\ufeff").splitlines()
+    if not lines:
+        raise StoryVideoError("screenplay.md is empty")
+    title = TITLE_RE.fullmatch(lines[0].strip())
+    if not title:
+        raise StoryVideoError(
+            "screenplay.md must begin with "
+            "'# Cinematic Widescreen Production Script: <title>'"
+        )
+
+    index = _expect_heading(lines, 1, "## Production Information")
+    production_information, index = _parse_field_table(
+        lines,
+        index,
+        PRODUCTION_INFORMATION_FIELDS,
+        label="Production Information",
+    )
+
+    index = _expect_heading(lines, index, "## Characters")
+    character_rows, index = _parse_table(
+        lines, index, columns=CHARACTER_TABLE_COLUMNS, label="Characters table"
+    )
+    characters: list[dict[str, Any]] = []
+    entity_map: dict[str, dict[str, Any]] = {}
+    character_names: set[str] = set()
+    for row in character_rows:
+        entity_id = row["Entity ID"]
+        name = row["Character"]
+        if not ENTITY_ID_RE.fullmatch(entity_id) or entity_id in entity_map:
+            raise StoryVideoError("Characters table repeats or invalidates an Entity ID")
+        if name.casefold() in character_names:
+            raise StoryVideoError("Characters table repeats a Character name")
+        character_names.add(name.casefold())
+        member_types = (
+            []
+            if row["Member Types"] == "none"
+            else [item.strip() for item in row["Member Types"].split(";")]
+        )
+        entity = {
+            "entity_id": entity_id,
+            "screenplay_character_name_en": name,
+            "story_role": row["Story Role"],
+            "narrative_function_en": row["Narrative Function"],
+            "entity_kind": row["Kind"],
+            "recurring": _yes_no(row["Recurring"], label=f"{entity_id} Recurring"),
+            "group_role_type_en": row["Group Role"],
+            "ensemble_member_types_en": member_types,
+            "narration_eligibility": row["Narration"],
+            "description_en": row["Description"],
+        }
+        characters.append(entity)
+        entity_map[entity_id] = entity
+
+    index = _expect_heading(lines, index, "## Script")
+    raw_units: list[dict[str, Any]] = []
+    while True:
+        index = _next_nonempty(lines, index)
+        if index >= len(lines) or lines[index].strip() == "## Continuity Appendix":
+            break
+        match = SCENE_UNIT_RE.fullmatch(lines[index].strip())
+        if not match or int(match.group(1)) != len(raw_units) + 1:
+            raise StoryVideoError(f"Unexpected screenplay line: {lines[index].strip()}")
+        unit_number = int(match.group(1))
+        index = _expect_heading(lines, index + 1, "### Scene Unit Information")
+        fields, index = _parse_field_table(
+            lines,
+            index,
+            SCENE_UNIT_INFORMATION_FIELDS,
+            label=f"Scene Unit {unit_number} Information",
+        )
+        index = _expect_heading(lines, index, "### Shot Execution")
+        shot_rows, index = _parse_table(
+            lines,
+            index,
+            columns=SHOT_EXECUTION_COLUMNS,
+            label=f"Scene Unit {unit_number} Shot Execution",
+        )
+        shots = _parse_shot_rows(shot_rows, label=f"Scene Unit {unit_number}")
+        index = _expect_heading(lines, index, "### Character Staging")
+        staging_rows, index = _parse_table(
+            lines,
+            index,
+            columns=CHARACTER_STAGING_COLUMNS,
+            label=f"Scene Unit {unit_number} Character Staging",
+        )
+        calls = []
+        for row in staging_rows:
+            calls.append(
+                {
+                    "entity_id": row["Entity ID"],
+                    "presence_mode": row["Presence"],
+                    "appearance_mode": row["Appearance"],
+                    "appearance_trigger_en": row["Trigger"],
+                    "entry_path_or_opening_position_en": row[
+                        "Entry Path / Opening Position"
+                    ],
+                    "first_visible_block_id": row["First Visible Shot"],
+                    "first_visible_moment_en": row["First Visible Moment"],
+                    "landing_block_id": row["Landing Shot"],
+                    "landing_result_en": row["Landing Moment / Result"],
+                    "speaks": _yes_no(row["Speaks"], label=f"{row['Entity ID']} Speaks"),
+                    "line_ids": _ids(
+                        row["Lines"],
+                        LINE_ID_RE,
+                        label=f"{row['Entity ID']} Lines",
+                        allow_none=True,
+                    ),
+                    "state_changing_action": _yes_no(
+                        row["State Change"], label=f"{row['Entity ID']} State Change"
+                    ),
+                    "action_block_ids": _ids(
+                        row["Action Shots"],
+                        ACTION_ID_RE,
+                        label=f"{row['Entity ID']} Action Shots",
+                        allow_none=True,
+                    ),
+                }
+            )
+        raw_units.append(
+            {
+                "id": unit_number,
+                "label_en": match.group(2).strip(),
+                "fields": fields,
+                "shots": shots,
+                "performance_calls": calls,
+            }
+        )
+
+    index = _expect_heading(lines, index, "## Continuity Appendix")
+    index = _expect_heading(lines, index, "### Environments")
+    rows, index = _parse_table(
+        lines, index, columns=ENVIRONMENT_TABLE_COLUMNS, label="Environments table"
+    )
+    environments = [
+        {
+            "environment_id": row["Environment ID"],
+            "logical_name_en": row["Logical Environment"],
+            "scene_ids_json": _ids(
+                row["Scene IDs"], SCENE_ID_RE, label="Environment Scene IDs"
+            ),
+            "int_ext": row["INT/EXT"],
+            "time_context_en": row["Time Context"],
+            "environment_facts_en": row["Environment Facts"],
+            "story_function_en": row["Story Function"],
+        }
+        for row in rows
+    ]
+
+    index = _expect_heading(lines, index, "### Scenes")
+    rows, index = _parse_table(lines, index, columns=SCENE_TABLE_COLUMNS, label="Scenes table")
+    scenes = [
+        {
+            "scene_id": row["Scene ID"],
+            "segment_ids_json": _ids(
+                row["Segment IDs"], SEGMENT_ID_RE, label="Scene Segment IDs"
+            ),
+            "primary_time_en": row["Primary Time"],
+            "primary_place_en": row["Primary Place"],
+            "narrative_event_en": row["Narrative Event"],
+            "entry_boundary": row["Entry Boundary"],
+            "entry_reason_en": row["Entry Reason"],
+            "continuity_reference_segment_id": row["Continuity Reference Segment"],
+            "continuity_reference_reason_en": row["Continuity Reference Reason"],
+        }
+        for row in rows
+    ]
+
+    index = _expect_heading(lines, index, "### Scene Dramatic Contracts")
     rows, index = _parse_table(
         lines,
         index,
-        columns=SCENE_TABLE_COLUMNS,
-        label="Scenes table",
+        columns=SCENE_CONTRACT_TABLE_COLUMNS,
+        label="Scene Dramatic Contracts table",
     )
-    scenes: list[dict[str, Any]] = []
-    for row_index, row in enumerate(rows, start=1):
-        try:
-            segment_ids = json.loads(row["Segment IDs JSON"])
-        except json.JSONDecodeError as exc:
-            raise StoryVideoError(
-                f"Scenes row {row_index} Segment IDs JSON is invalid"
-            ) from exc
-        scenes.append(
-            {
-                "scene_id": row["Scene ID"],
-                "segment_ids_json": segment_ids,
-                "primary_time_en": row["Primary Time"],
-                "primary_place_en": row["Primary Place"],
-                "narrative_event_en": row["Narrative Event"],
-                "entry_boundary": row["Entry Boundary"],
-                "entry_reason_en": row["Entry Reason"],
-                "continuity_reference_segment_id": row[
-                    "Continuity Reference Segment"
-                ],
-                "continuity_reference_reason_en": row[
-                    "Continuity Reference Reason"
-                ],
-            }
-        )
-    return scenes, index
+    scene_contracts = {
+        row["Scene ID"]: {
+            "scene_id": row["Scene ID"],
+            "scene_purpose": row["Purpose"],
+            "character_objective": row["Character Objective"],
+            "obstacle": row["Obstacle"],
+            "power_relationship": row["Power Relationship"],
+            "turning_point": row["Turning Point"],
+            "outcome": row["Outcome"],
+            "visual_progression": row["Spatial Progression"],
+            "exit_impulse": row["Exit Impulse"],
+        }
+        for row in rows
+    }
 
-
-def _parse_continuity_states_header(
-    lines: list[str], index: int
-) -> tuple[list[dict[str, Any]], dict[str, dict[str, str]], int]:
+    index = _expect_heading(lines, index, "### Continuity States")
     rows, index = _parse_table(
         lines,
         index,
         columns=CONTINUITY_STATE_TABLE_COLUMNS,
         label="Continuity States table",
     )
-    states: list[dict[str, Any]] = []
-    state_map: dict[str, dict[str, str]] = {}
-    for row_index, row in enumerate(rows, start=1):
-        state_id = row["State ID"]
-        if state_id in state_map:
-            raise StoryVideoError(f"Continuity States repeats {state_id}")
-        values = {
-            category: row[column]
-            for category, column in zip(
-                CONTINUITY_CATEGORIES, CONTINUITY_STATE_TABLE_COLUMNS[1:]
-            )
+    continuity_states = [
+        {
+            "state_id": row["State ID"],
+            "parent_state_ref": row["Parent State"],
+            "changed_facts_en": row["Changed Facts"],
+            "change_reason_en": row["Change Reason"],
         }
-        state_map[state_id] = values
-        states.append({"state_id": state_id, "state_json": values})
-    return states, state_map, index
+        for row in rows
+    ]
+    state_map = {item["state_id"]: item for item in continuity_states}
 
-
-def _parse_continuity_boundaries_header(
-    lines: list[str], index: int
-) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], int]:
+    index = _expect_heading(lines, index, "### Continuity Boundaries")
     rows, index = _parse_table(
         lines,
         index,
@@ -581,345 +774,106 @@ def _parse_continuity_boundaries_header(
         label="Continuity Boundaries table",
         allow_empty=True,
     )
-    boundaries: list[dict[str, Any]] = []
-    boundary_map: dict[str, dict[str, Any]] = {}
-    for row_index, row in enumerate(rows, start=1):
-        boundary_id = row["Boundary ID"]
-        if boundary_id in boundary_map:
-            raise StoryVideoError(f"Continuity Boundaries repeats {boundary_id}")
-        try:
-            policy = json.loads(row["Anchor Policy JSON"])
-        except json.JSONDecodeError as exc:
-            raise StoryVideoError(
-                f"Continuity Boundaries row {row_index} Anchor Policy JSON is invalid"
-            ) from exc
-        boundary = {
-            "boundary_id": boundary_id,
+    continuity_boundaries = [
+        {
+            "boundary_id": row["Boundary ID"],
             "from_segment_id": row["From Segment"],
             "to_segment_id": row["To Segment"],
             "from_state_ref": row["From State"],
             "to_state_ref": row["To State"],
-            "anchor_policy_json": policy,
+            "handoff": row["Handoff"],
+            "transition_type": row["Transition"],
+            "dramatic_reason_en": row["Dramatic Reason"],
+            "audio_handoff_en": row["Audio Handoff"],
+            "continuity_handoff_en": row["Continuity Handoff"],
         }
-        boundary_map[boundary_id] = boundary
-        boundaries.append(boundary)
-    return boundaries, boundary_map, index
+        for row in rows
+    ]
+    if _next_nonempty(lines, index) != len(lines):
+        raise StoryVideoError("screenplay.md contains content after the appendix")
 
-
-def _state_reference(
-    value: Any,
-    *,
-    state_map: dict[str, dict[str, str]],
-    label: str,
-) -> tuple[str, dict[str, str]]:
-    if not isinstance(value, dict) or set(value) != STATE_REF_KEYS:
-        raise StoryVideoError(f"{label} must contain only state_ref")
-    state_ref = value.get("state_ref")
-    if not isinstance(state_ref, str) or state_ref not in state_map:
-        raise StoryVideoError(f"{label} references an unknown continuity state")
-    return state_ref, dict(state_map[state_ref])
-
-
-def _expand_anchor_policy(
-    boundary: dict[str, Any],
-    *,
-    from_state: dict[str, str],
-    to_state: dict[str, str],
-) -> list[dict[str, str]]:
-    policy = boundary.get("anchor_policy_json")
-    if not isinstance(policy, dict) or set(policy) != ANCHOR_POLICY_KEYS:
-        raise StoryVideoError(
-            f"{boundary.get('boundary_id')} Anchor Policy JSON has invalid keys"
-        )
-    default = policy.get("default")
-    overrides = policy.get("overrides")
-    if not isinstance(default, dict) or set(default) != ANCHOR_POLICY_DEFAULT_KEYS:
-        raise StoryVideoError(
-            f"{boundary.get('boundary_id')} Anchor Policy default is invalid"
-        )
-    if not isinstance(overrides, dict) or any(
-        category not in CONTINUITY_CATEGORIES for category in overrides
-    ):
-        raise StoryVideoError(
-            f"{boundary.get('boundary_id')} Anchor Policy overrides are invalid"
-        )
-    anchors: list[dict[str, str]] = []
-    for category in CONTINUITY_CATEGORIES:
-        decision = overrides.get(category, default)
-        if not isinstance(decision, dict) or set(decision) != ANCHOR_POLICY_OVERRIDE_KEYS:
+    boundary_map = {item["boundary_id"]: item for item in continuity_boundaries}
+    segments: list[dict[str, Any]] = []
+    for unit_index, raw in enumerate(raw_units, start=1):
+        fields = raw["fields"]
+        expected_segment_id = f"segment-{unit_index:03d}"
+        if fields["Segment ID"] != expected_segment_id:
             raise StoryVideoError(
-                f"{boundary.get('boundary_id')} Anchor Policy {category} is invalid"
+                f"Scene Unit {unit_index} Segment ID must be {expected_segment_id}"
             )
-        anchors.append(
-            {
-                "category": category,
-                "status": decision.get("status"),
-                "from_en": from_state[category],
-                "to_en": to_state[category],
-                "reason_en": decision.get("reason_en"),
-            }
-        )
-    return anchors
-
-
-def _resolve_compact_story_plans(
-    segments: list[dict[str, Any]],
-    *,
-    state_map: dict[str, dict[str, str]],
-    boundary_map: dict[str, dict[str, Any]],
-) -> None:
-    for segment in segments:
-        plan = segment["story_plan"]
-        compact = dict(plan)
-        start_ref, start_state = _state_reference(
-            plan["start_state_json"],
-            state_map=state_map,
-            label=f"{plan['segment_id']}.start_state_json",
-        )
-        end_ref, end_state = _state_reference(
-            plan["end_state_json"],
-            state_map=state_map,
-            label=f"{plan['segment_id']}.end_state_json",
-        )
-        plan["start_state_json"] = start_state
-        plan["end_state_json"] = end_state
-        segment["compact_refs"] = {
+        scene_id = fields["Scene ID"]
+        if not SCENE_ID_RE.fullmatch(scene_id):
+            raise StoryVideoError(f"{expected_segment_id} has an invalid Scene ID")
+        if not SLUGLINE_RE.fullmatch(fields["Slugline"]):
+            raise StoryVideoError(f"{expected_segment_id} has an invalid Slugline")
+        if not re.fullmatch(r"[0-9]+", fields["Duration Seconds"]):
+            raise StoryVideoError(
+                f"{expected_segment_id} Duration Seconds must be an integer"
+            )
+        if not _concrete(fields["Environment"]) or not _concrete(
+            fields["Dramatic Purpose"]
+        ):
+            raise StoryVideoError(
+                f"{expected_segment_id} requires concrete Environment and Dramatic Purpose"
+            )
+        contract = scene_contracts.get(scene_id)
+        if contract is None:
+            raise StoryVideoError(f"{expected_segment_id} references an unknown Scene")
+        start_ref = fields["Start State"]
+        end_ref = fields["End State"]
+        if start_ref not in state_map or end_ref not in state_map:
+            raise StoryVideoError(f"{expected_segment_id} references an unknown continuity state")
+        incoming_ref = fields["Incoming Boundary"]
+        if unit_index == 1:
+            if incoming_ref != "opening":
+                raise StoryVideoError("segment-001 Incoming Boundary must be opening")
+        else:
+            incoming = boundary_map.get(incoming_ref)
+            if incoming is None:
+                raise StoryVideoError(
+                    f"{expected_segment_id} references an unknown Incoming Boundary"
+                )
+        for call in raw["performance_calls"]:
+            if call["entity_id"] not in entity_map:
+                raise StoryVideoError(
+                    f"{expected_segment_id} stages an undeclared Entity ID"
+                )
+        plan = {
+            "segment_id": expected_segment_id,
+            "scene_id": scene_id,
+            "estimated_duration_seconds": int(fields["Duration Seconds"]),
+            "dramatic_workload": fields["Workload"],
+            "location_time_environment_en": fields["Environment"],
+            "narrative_purpose_en": fields["Dramatic Purpose"],
+            "scene_dramatic_contract": contract,
             "start_state_ref": start_ref,
             "end_state_ref": end_ref,
-            "story_plan_json": compact,
+            "incoming_boundary_ref": incoming_ref,
         }
-
-    for index, segment in enumerate(segments):
-        plan = segment["story_plan"]
-        refs = segment["compact_refs"]
-        if index + 1 < len(segments):
-            successor_refs = segments[index + 1]["compact_refs"]
-            next_ref = successor_refs["start_state_ref"]
-            next_state = segments[index + 1]["story_plan"]["start_state_json"]
-        else:
-            next_ref = None
-            next_state = None
-        if index == 0:
-            boundary_ref = None
-            anchors: list[dict[str, str]] = []
-        else:
-            boundary_ref = f"boundary-{index:03d}"
-            boundary = boundary_map.get(boundary_ref)
-            if boundary is None:
-                raise StoryVideoError(
-                    f"{plan['segment_id']} lacks its canonical adjacent continuity boundary"
-                )
-            previous_plan = segments[index - 1]["story_plan"]
-            previous_refs = segments[index - 1]["compact_refs"]
-            if (
-                boundary["from_segment_id"] != previous_plan["segment_id"]
-                or boundary["to_segment_id"] != plan["segment_id"]
-                or boundary["from_state_ref"] != previous_refs["end_state_ref"]
-                or boundary["to_state_ref"] != refs["start_state_ref"]
-            ):
-                raise StoryVideoError(
-                    f"{boundary_ref} does not bind the actual adjacent Segments and states"
-                )
-            from_state = state_map[boundary["from_state_ref"]]
-            to_state = state_map[boundary["to_state_ref"]]
-            anchors = _expand_anchor_policy(
-                boundary, from_state=from_state, to_state=to_state
-            )
-        refs.update(
-            {
-                "next_state_ref": next_ref,
-                "boundary_ref": boundary_ref,
-            }
-        )
-        segment["derived_continuity"] = {
-            "next_segment_start_state": next_state,
-            "incoming_boundary_id": boundary_ref,
-            "anchors": anchors,
-        }
-
-
-def parse_screenplay_markdown(text: str) -> dict[str, Any]:
-    lines = text.lstrip("\ufeff").splitlines()
-    if not lines:
-        raise StoryVideoError("screenplay.md is empty")
-    title_match = TITLE_RE.fullmatch(lines[0].strip())
-    if not title_match:
-        raise StoryVideoError("screenplay.md must begin with '# Seedance Screenplay: <title>'")
-    index = 1
-    metadata: dict[str, str] = {}
-    for expected in META_ORDER:
-        index = _next_nonempty(lines, index)
-        if index >= len(lines):
-            raise StoryVideoError(f"screenplay.md is missing metadata '{expected}'")
-        match = META_RE.fullmatch(lines[index].strip())
-        if not match or match.group(1) != expected:
-            actual = match.group(1) if match else lines[index].strip()
-            raise StoryVideoError(
-                f"screenplay.md expected metadata '{expected}' before '{actual}'"
-            )
-        metadata[expected] = require_utf8_text(match.group(2), expected)
-        index += 1
-    index = _expect_section(lines, index, "## Characters")
-    characters, character_map, index = _parse_characters_header(lines, index)
-    index = _expect_section(lines, index, "## Environments")
-    environments, index = _parse_environments_header(lines, index)
-    index = _expect_section(lines, index, "## Scenes")
-    scenes, index = _parse_scenes_header(lines, index)
-    index = _expect_section(lines, index, "## Continuity States")
-    continuity_states, state_map, index = _parse_continuity_states_header(
-        lines, index
-    )
-    index = _expect_section(lines, index, "## Continuity Boundaries")
-    continuity_boundaries, boundary_map, index = (
-        _parse_continuity_boundaries_header(lines, index)
-    )
-
-    segments: list[dict[str, Any]] = []
-    while index < len(lines):
-        index = _next_nonempty(lines, index)
-        if index >= len(lines):
-            break
-        match = SEGMENT_RE.fullmatch(lines[index].strip())
-        if not match:
-            raise StoryVideoError(f"Unexpected screenplay line: {lines[index].strip()}")
-        numeric_id = int(match.group(1))
-        if numeric_id != len(segments) + 1:
-            raise StoryVideoError("screenplay.md Segment numbers must be consecutive from 1")
-        index = _next_nonempty(lines, index + 1)
-        if index >= len(lines):
-            raise StoryVideoError(f"Segment {numeric_id} is missing its slugline")
-        slugline = SLUGLINE_RE.fullmatch(lines[index].strip())
-        if not slugline:
-            raise StoryVideoError(f"Segment {numeric_id} has an invalid INT./EXT. slugline")
-        story_plan, index = _parse_story_plan(lines, index + 1, numeric_id)
-        blocks, index = _parse_segment_content(lines, index, character_map)
-        spoken = [block for block in blocks if block["type"] == "dialogue"]
-        actions = [block["text_en"] for block in blocks if block["type"] == "action"]
         segments.append(
             {
-                "id": numeric_id,
-                "heading_en": slugline.group(1),
-                "blocks": blocks,
-                "action_blocks": actions,
-                "spoken_entries": spoken,
-                "story_plan": story_plan,
+                "id": unit_index,
+                "heading_en": fields["Slugline"],
+                "label_en": raw["label_en"],
+                "shots": raw["shots"],
+                "story_plan": plan,
+                "performance_calls": raw["performance_calls"],
             }
         )
-    _resolve_compact_story_plans(
-        segments, state_map=state_map, boundary_map=boundary_map
-    )
+
     screenplay = {
-        "screenplay_title_en": title_match.group(1).strip(),
-        "target_language_en": metadata["Target language"],
-        "target_age_band": metadata["Target age band"],
-        "seedance_mapping": metadata["Seedance mapping"],
-        "segment_duration_policy": metadata["Segment duration policy"],
-        "segment_boundary_policy": metadata["Segment boundary policy"],
+        "screenplay_title_en": title.group(1).strip(),
+        "production_information": production_information,
         "characters": characters,
         "environments": environments,
         "scenes": scenes,
+        "scene_dramatic_contracts": scene_contracts,
         "continuity_states": continuity_states,
         "continuity_boundaries": continuity_boundaries,
         "segments": segments,
-        "total_duration_seconds": sum(
-            int(segment["story_plan"]["estimated_duration_seconds"])
-            for segment in segments
-        ),
     }
     validate_screenplay(screenplay)
     return screenplay
-
-
-def _concrete(value: Any, *, allow_not_applicable: bool = False) -> bool:
-    if not isinstance(value, str):
-        return False
-    normalized = value.strip().casefold()
-    if allow_not_applicable and normalized == "not_applicable":
-        return True
-    if normalized in {"", "none", "n/a", "na", "same", "consistent", "natural", "tbd"}:
-        return False
-    return len(WORD_RE.findall(value)) >= 4
-
-
-def _validate_state(value: Any, *, label: str) -> None:
-    if not isinstance(value, dict) or tuple(value) != CONTINUITY_CATEGORIES:
-        raise StoryVideoError(
-            f"{label} must contain the exact ordered narrative/state categories"
-        )
-    for category in CONTINUITY_CATEGORIES:
-        if not _concrete(value[category], allow_not_applicable=True):
-            raise StoryVideoError(f"{label}.{category} must be concrete")
-
-
-def _validate_scene_dramatic_contract(
-    value: Any, *, scene_id: str, label: str
-) -> None:
-    if not isinstance(value, dict) or tuple(value) != SCENE_DRAMATIC_FIELDS:
-        raise StoryVideoError(
-            f"{label} must contain the exact ordered cinematic Scene fields"
-        )
-    if value["scene_id"] != scene_id:
-        raise StoryVideoError(f"{label}.scene_id must equal {scene_id}")
-    for field in SCENE_DRAMATIC_FIELDS[1:]:
-        if not _concrete(value[field]):
-            raise StoryVideoError(f"{label}.{field} must be concrete")
-    if value["visual_progression"].strip().casefold() == value["outcome"].strip().casefold():
-        raise StoryVideoError(
-            f"{label}.visual_progression must describe visible spatial/action change, not restate outcome"
-        )
-
-
-def _validate_dramatic_beats(
-    value: Any,
-    *,
-    segment_id: str,
-    blocks: list[dict[str, Any]],
-    known_beat_ids: set[str],
-) -> None:
-    label = f"{segment_id}.dramatic_beats_json"
-    if not isinstance(value, list) or not value:
-        raise StoryVideoError(f"{label} must contain at least one Dramatic Beat")
-    covered_blocks: list[int] = []
-    for index, beat in enumerate(value, start=1):
-        beat_label = f"{label}[{index}]"
-        if not isinstance(beat, dict) or tuple(beat) != DRAMATIC_BEAT_FIELDS:
-            raise StoryVideoError(
-                f"{beat_label} must contain the exact ordered Dramatic Beat fields"
-            )
-        beat_id = beat["beat_id"]
-        if not isinstance(beat_id, str) or not DRAMATIC_BEAT_ID_RE.fullmatch(beat_id):
-            raise StoryVideoError(f"{beat_label}.beat_id must be one stable BEAT-* ID")
-        if beat_id in known_beat_ids:
-            raise StoryVideoError(f"screenplay.md repeats Dramatic Beat {beat_id}")
-        known_beat_ids.add(beat_id)
-        for field in DRAMATIC_BEAT_FIELDS[1:-1]:
-            if not _concrete(beat[field]):
-                raise StoryVideoError(f"{beat_label}.{field} must be concrete")
-        block_indexes = beat["block_indexes"]
-        if (
-            not isinstance(block_indexes, list)
-            or not block_indexes
-            or any(isinstance(item, bool) or not isinstance(item, int) for item in block_indexes)
-            or len(block_indexes) != len(set(block_indexes))
-        ):
-            raise StoryVideoError(
-                f"{beat_label}.block_indexes must be a nonempty unique integer list"
-            )
-        if any(item < 1 or item > len(blocks) for item in block_indexes):
-            raise StoryVideoError(f"{beat_label}.block_indexes contains an out-of-range block")
-        covered_blocks.extend(block_indexes)
-        owned_blocks = [blocks[item - 1] for item in block_indexes]
-        if any(block.get("type") == "dialogue" for block in owned_blocks) and not any(
-            block.get("type") == "action" for block in owned_blocks
-        ):
-            raise StoryVideoError(
-                f"{beat_label} contains dialogue without an owned action/reaction block"
-            )
-    expected_blocks = list(range(1, len(blocks) + 1))
-    if sorted(covered_blocks) != expected_blocks:
-        raise StoryVideoError(
-            f"{label} must partition every screenplay block exactly once"
-        )
 
 
 def validate_cinematic_segment_contract(
@@ -927,527 +881,532 @@ def validate_cinematic_segment_contract(
     segment_id: str,
     scene_id: str,
     scene_contract: Any,
-    dramatic_beats: Any,
-    blocks: list[dict[str, Any]],
+    shots: list[dict[str, Any]],
     known_beat_ids: set[str] | None = None,
 ) -> None:
-    """Gate one screenplay Segment before Storyboard without choosing cameras."""
-
-    _validate_scene_dramatic_contract(
-        scene_contract,
-        scene_id=scene_id,
-        label=f"{segment_id}.scene_dramatic_contract_json",
-    )
-    _validate_dramatic_beats(
-        dramatic_beats,
-        segment_id=segment_id,
-        blocks=blocks,
-        known_beat_ids=known_beat_ids if known_beat_ids is not None else set(),
-    )
-    for block in blocks:
-        if block.get("type") == "action" and STAGE_TABLEAU_RISK_RE.search(
-            str(block.get("text_en") or "")
-        ):
-            raise StoryVideoError(
-                f"{segment_id} contains stage-tableau action language; rewrite character objectives, spatial roles, and visible behavior before Storyboard"
-            )
-
-
-def _validate_transition(value: Any, *, final: bool, segment_id: str) -> None:
-    if not isinstance(value, dict) or set(value) != TRANSITION_DESIGN_KEYS:
-        raise StoryVideoError(f"{segment_id} transition_design_json has invalid keys")
-    kind = value.get("type")
-    if kind not in TRANSITION_DESIGN_TYPES:
-        raise StoryVideoError(f"{segment_id} transition type is invalid")
-    if final != (kind == "final_end"):
-        raise StoryVideoError(f"{segment_id} final/non-final transition type is invalid")
-    for field in TRANSITION_DESIGN_KEYS - {"type"}:
-        if not _concrete(value[field], allow_not_applicable=final and field.startswith("incoming_")):
-            raise StoryVideoError(f"{segment_id} transition field {field} must be concrete")
-    combined = " ".join(str(value[field]) for field in TRANSITION_DESIGN_KEYS)
-    if FORBIDDEN_CROSS_CLIP_DEPENDENCY_RE.search(combined):
-        raise StoryVideoError(f"{segment_id} transition contains forbidden cross-clip dependency")
+    if not isinstance(scene_contract, dict) or scene_contract.get("scene_id") != scene_id:
+        raise StoryVideoError(f"{segment_id} has an invalid Scene dramatic contract")
+    for field in (
+        "scene_purpose",
+        "character_objective",
+        "obstacle",
+        "power_relationship",
+        "turning_point",
+        "outcome",
+        "visual_progression",
+        "exit_impulse",
+    ):
+        if not _concrete(scene_contract.get(field)):
+            raise StoryVideoError(f"{segment_id} Scene contract {field} must be concrete")
+    if not isinstance(shots, list) or not shots:
+        raise StoryVideoError(f"{segment_id} must contain at least one authored Shot Beat")
+    known = known_beat_ids if known_beat_ids is not None else set()
+    for shot in shots:
+        beat_id = shot.get("beat_id")
+        if not isinstance(beat_id, str) or not BEAT_ID_RE.fullmatch(beat_id) or beat_id in known:
+            raise StoryVideoError(f"{segment_id} repeats or invalidates a Beat ID")
+        known.add(beat_id)
+        if STAGE_TABLEAU_RISK_RE.search(str(shot.get("visual_action_en", ""))):
+            raise StoryVideoError(f"{segment_id} contains stage-tableau action language")
 
 
 def validate_adjacent_visual_boundary_contract(
     *,
     segment_id: str,
-    predecessor_plan: dict[str, Any],
-    current_plan: dict[str, Any],
+    predecessor_scene_id: str,
+    current_scene_id: str,
+    boundary: dict[str, Any],
+    predecessor_final_shot: dict[str, Any],
 ) -> None:
-    """Validate deterministic prerequisites for an authored visual inheritance."""
+    incoming = boundary["handoff"]
+    same_scene = predecessor_scene_id == current_scene_id
+    if same_scene and incoming == "independent":
+        raise StoryVideoError(f"{segment_id} shares a Scene with its predecessor and must be serial")
+    if not same_scene and incoming == "continuous_motion":
+        raise StoryVideoError(f"{segment_id} cannot carry continuous_motion across a Scene boundary")
+    if incoming == "continuous_motion":
+        combined = " ".join(
+            [
+                boundary["continuity_handoff_en"],
+                predecessor_final_shot["completion_state_en"],
+                predecessor_final_shot["blocking_movement_en"],
+            ]
+        )
+        if not INHERITED_VISUAL_PHASE_RE.search(combined):
+            raise StoryVideoError(
+                f"{segment_id} continuous_motion must name its unfinished inherited phase"
+            )
 
-    incoming_requirement = current_plan["incoming_visual_requirement"]
-    same_scene = predecessor_plan["scene_id"] == current_plan["scene_id"]
-    if same_scene and incoming_requirement == "independent":
-        raise StoryVideoError(
-            f"{segment_id} shares a Scene with its predecessor and cannot be "
-            "independent; use state_match for soft first-frame reference or "
-            "continuous_motion for predecessor-video reference"
-        )
-    if not same_scene and incoming_requirement == "continuous_motion":
-        raise StoryVideoError(
-            f"{segment_id} continuous_motion cannot cross a Scene boundary"
-        )
-    if incoming_requirement != "continuous_motion":
-        return
-    predecessor_transition = predecessor_plan["transition_design_json"]
-    if predecessor_transition["type"] not in {
-        "hard_cut",
-        "action_cut",
-        "match_cut",
-        "eyeline_cut",
-        "reaction_cut",
-    }:
-        raise StoryVideoError(
-            f"{segment_id} continuous_motion requires a cut-like predecessor transition"
-        )
-    inherited_phase_text = " ".join(
-        str(value)
-        for value in (
-            predecessor_transition["outgoing_visible_en"],
-            predecessor_transition["incoming_visible_en"],
-            predecessor_transition["action_link_en"],
-            predecessor_transition["spatial_link_en"],
-        )
-    )
-    if not INHERITED_VISUAL_PHASE_RE.search(inherited_phase_text):
-        raise StoryVideoError(
-            f"{segment_id} continuous_motion must name the inherited visual, "
-            "performance, blocking, or camera phase"
-        )
+
+def _validate_performance(screenplay: dict[str, Any]) -> None:
+    entities = {item["entity_id"]: item for item in screenplay["characters"]}
+    used_entities: set[str] = set()
+    speaking_entities: set[str] = set()
+    for segment in screenplay["segments"]:
+        segment_id = segment["story_plan"]["segment_id"]
+        shots = segment["shots"]
+        shot_map = {shot["shot_id"]: shot for shot in shots}
+        shot_time_bounds: dict[str, tuple[float, float]] = {}
+        shot_cursor = 0.0
+        for shot in shots:
+            shot_time_bounds[shot["shot_id"]] = (
+                shot_cursor,
+                shot_cursor + shot["duration_seconds"],
+            )
+            shot_cursor += shot["duration_seconds"]
+        calls = segment["performance_calls"]
+        call_map = {call["entity_id"]: call for call in calls}
+        if len(call_map) != len(calls) or any(entity_id not in entities for entity_id in call_map):
+            raise StoryVideoError(f"{segment_id} repeats or invents Character Staging")
+        used_entities.update(call_map)
+
+        expected_performers = {
+            entity_id for shot in shots for entity_id in shot["performer_ids"]
+        }
+        expected_speakers = {
+            shot["dialogue"]["speaker_entity_id"]
+            for shot in shots
+            if shot["dialogue"] is not None
+        }
+        if set(call_map) != expected_performers | expected_speakers:
+            raise StoryVideoError(
+                f"{segment_id} Character Staging must cover exactly its performers and speakers"
+            )
+
+        line_owner: dict[str, str] = {}
+        for call in calls:
+            entity_id = call["entity_id"]
+            entity = entities[entity_id]
+            presence = call["presence_mode"]
+            appearance = call["appearance_mode"]
+            if presence not in PRESENCE_MODES or appearance not in APPEARANCE_MODES:
+                raise StoryVideoError(f"{entity_id} has invalid Presence or Appearance")
+            if call["speaks"] != bool(call["line_ids"]):
+                raise StoryVideoError(f"{entity_id} Speaks and Lines disagree")
+            if call["speaks"]:
+                speaking_entities.add(entity_id)
+            for line_id in call["line_ids"]:
+                if line_id in line_owner:
+                    raise StoryVideoError(f"{line_id} has repeated Character Staging ownership")
+                line_owner[line_id] = entity_id
+
+            action_ids = call["action_block_ids"]
+            if any(shot_id not in shot_map for shot_id in action_ids):
+                raise StoryVideoError(f"{entity_id} references an unknown Action Shot")
+            actual_action_ids = [
+                shot["shot_id"] for shot in shots if entity_id in shot["performer_ids"]
+            ]
+            if action_ids != actual_action_ids:
+                raise StoryVideoError(
+                    f"{entity_id} Action Shots must exactly match authored Shot performers"
+                )
+
+            appearance_fields = (
+                call["appearance_trigger_en"],
+                call["entry_path_or_opening_position_en"],
+                call["first_visible_block_id"],
+                call["first_visible_moment_en"],
+                call["landing_block_id"],
+                call["landing_result_en"],
+            )
+            if presence != "on_screen":
+                if appearance != "not_visible" or any(
+                    value != "not_visible" for value in appearance_fields
+                ):
+                    raise StoryVideoError(
+                        f"{entity_id} O.S./V.O. staging must use not_visible throughout"
+                    )
+                if action_ids:
+                    raise StoryVideoError(f"{entity_id} O.S./V.O. cannot own visible Action Shots")
+            else:
+                if appearance not in {"present_at_open", "enters"}:
+                    raise StoryVideoError(
+                        f"{entity_id} on-screen staging requires present_at_open or enters"
+                    )
+                if appearance == "present_at_open":
+                    if call["appearance_trigger_en"] != "opening":
+                        raise StoryVideoError(
+                            f"{entity_id} present_at_open Trigger must be opening"
+                        )
+                elif not _concrete(call["appearance_trigger_en"]):
+                    raise StoryVideoError(f"{entity_id} entrance Trigger must be concrete")
+                if not _concrete(call["entry_path_or_opening_position_en"]):
+                    raise StoryVideoError(
+                        f"{entity_id} requires a concrete Entry Path / Opening Position"
+                    )
+                first_id = call["first_visible_block_id"]
+                landing_id = call["landing_block_id"]
+                if first_id not in action_ids or landing_id not in action_ids:
+                    raise StoryVideoError(
+                        f"{entity_id} First Visible and Landing Shots must be owned Action Shots"
+                    )
+                positions = {shot["shot_id"]: i for i, shot in enumerate(shots)}
+                if positions[first_id] > positions[landing_id]:
+                    raise StoryVideoError(
+                        f"{entity_id} First Visible Shot must not follow Landing Shot"
+                    )
+                first_time, _ = _timed_moment(
+                    call["first_visible_moment_en"],
+                    label=f"{entity_id} First Visible Moment",
+                )
+                landing_time, _ = _timed_moment(
+                    call["landing_result_en"],
+                    label=f"{entity_id} Landing Moment / Result",
+                )
+                if appearance == "present_at_open" and first_time != 0.0:
+                    raise StoryVideoError(
+                        f"{entity_id} present_at_open must be first visible at t=0.0s"
+                    )
+                if appearance == "enters" and first_time <= 0.0:
+                    raise StoryVideoError(
+                        f"{entity_id} entrance First Visible Moment must follow t=0.0s"
+                    )
+                if landing_time < first_time:
+                    raise StoryVideoError(
+                        f"{entity_id} Landing Moment must not precede First Visible Moment"
+                    )
+                first_bounds = shot_time_bounds[first_id]
+                landing_bounds = shot_time_bounds[landing_id]
+                if not first_bounds[0] <= first_time <= first_bounds[1]:
+                    raise StoryVideoError(
+                        f"{entity_id} First Visible Moment falls outside its referenced Shot"
+                    )
+                if not landing_bounds[0] <= landing_time <= landing_bounds[1]:
+                    raise StoryVideoError(
+                        f"{entity_id} Landing Moment falls outside its referenced Shot"
+                    )
+                if shot_map[landing_id]["completion_mode"] != "completed":
+                    raise StoryVideoError(
+                        f"{entity_id} Landing Shot must have a completed action state"
+                    )
+
+            if entity["entity_kind"] == "anonymous_ensemble" and call["speaks"]:
+                raise StoryVideoError(f"{entity_id} anonymous ensemble cannot own dialogue")
+
+        expected_line_owner = {
+            shot["dialogue"]["line_id"]: shot["dialogue"]["speaker_entity_id"]
+            for shot in shots
+            if shot["dialogue"] is not None
+        }
+        if line_owner != expected_line_owner:
+            raise StoryVideoError(
+                f"{segment_id} Character Staging must own every Dialogue Line exactly once"
+            )
+
+        for shot in shots:
+            relations = shot["gaze_relations"]
+            dialogue = shot["dialogue"]
+            nonvisible_speaker_ids = set()
+            if dialogue is not None:
+                dialogue_call = call_map[dialogue["speaker_entity_id"]]
+                if dialogue_call["presence_mode"] != "on_screen":
+                    nonvisible_speaker_ids.add(dialogue["speaker_entity_id"])
+            if set(relations) != set(shot["performer_ids"]) | nonvisible_speaker_ids:
+                raise StoryVideoError(
+                    f"{shot['shot_id']} Gaze / Addressee must cover every visible Performer and non-visible speaker once"
+                )
+            for performer_id, relation in relations.items():
+                if performer_id not in call_map:
+                    raise StoryVideoError(
+                        f"{shot['shot_id']} gives gaze authority to an unstaged entity"
+                    )
+                if call_map[performer_id]["presence_mode"] == "on_screen" and (
+                    relation["facing"] == "not_visible" or relation["gaze"] == "not_visible"
+                ):
+                    raise StoryVideoError(
+                        f"{shot['shot_id']} visible performer requires concrete facing and gaze"
+                    )
+                if call_map[performer_id]["presence_mode"] != "on_screen" and (
+                    relation["facing"] != "not_visible" or relation["gaze"] != "not_visible"
+                ):
+                    raise StoryVideoError(
+                        f"{shot['shot_id']} non-visible speaker must use not_visible facing and gaze"
+                    )
+            if dialogue is None:
+                continue
+            speaker_id = dialogue["speaker_entity_id"]
+            call = call_map[speaker_id]
+            relation = relations.get(speaker_id)
+            if call["presence_mode"] == "on_screen":
+                if speaker_id not in shot["performer_ids"] or relation is None:
+                    raise StoryVideoError(
+                        f"{dialogue['line_id']} on-screen speaker lacks same-Shot performance and gaze"
+                    )
+            else:
+                if relation is None or relation["facing"] != "not_visible" or relation["gaze"] != "not_visible":
+                    raise StoryVideoError(
+                        f"{dialogue['line_id']} O.S./V.O. requires not_visible facing and gaze"
+                    )
+            target = relation["target"]
+            if target not in call_map and target not in DIALOGUE_ADDRESSEE_SPECIALS:
+                raise StoryVideoError(f"{dialogue['line_id']} has an undeclared dialogue Addressee")
+            if target == speaker_id:
+                raise StoryVideoError(f"{dialogue['line_id']} must use self for self-address")
+
+        dialogue_calls = [call for call in calls if call["speaks"]]
+        visible_dialogue = [call for call in dialogue_calls if call["presence_mode"] == "on_screen"]
+        nonvisible_dialogue = [call for call in dialogue_calls if call["presence_mode"] != "on_screen"]
+        group_roles = {
+            entities[call["entity_id"]]["group_role_type_en"]
+            for call in calls
+            if entities[call["entity_id"]]["entity_kind"] == "anonymous_ensemble"
+        }
+        if len(dialogue_calls) > 3 or len(visible_dialogue) > 2 or len(nonvisible_dialogue) > 1:
+            raise StoryVideoError(f"{segment_id} exceeds dialogue-character scope")
+        if len(group_roles) > 2 or 1 + len(dialogue_calls) + len(group_roles) > 6:
+            raise StoryVideoError(f"{segment_id} exceeds static-reference scope")
+        if len(expected_line_owner) > 3:
+            raise StoryVideoError(f"{segment_id} exceeds three Dialogue Lines")
+
+    if used_entities != set(entities):
+        raise StoryVideoError("Characters table contains unused entities")
+    for entity_id, entity in entities.items():
+        member_types = entity["ensemble_member_types_en"]
+        if entity["entity_kind"] == "anonymous_ensemble":
+            if entity["recurring"] or entity["group_role_type_en"] == "none" or not member_types:
+                raise StoryVideoError(
+                    f"{entity_id} anonymous ensemble needs a non-recurring Group Role and Member Types"
+                )
+            if entity_id in speaking_entities:
+                raise StoryVideoError(f"{entity_id} anonymous ensemble cannot speak")
+        elif entity["group_role_type_en"] != "none" or member_types:
+            raise StoryVideoError(
+                f"{entity_id} individual must use none for Group Role and Member Types"
+            )
 
 
 def validate_screenplay(screenplay: dict[str, Any]) -> None:
-    fixed = {
-        "target_language_en": "English",
-        "seedance_mapping": "one_segment_one_video",
-        "segment_duration_policy": "natural_4_to_15_seconds",
-        "segment_boundary_policy": "semantic_boundary_execution",
-    }
-    for field, expected in fixed.items():
-        if screenplay.get(field) != expected:
-            raise StoryVideoError(f"screenplay.md {field} must be {expected}")
-    if screenplay.get("target_age_band") not in TARGET_AGE_BANDS:
-        raise StoryVideoError("screenplay.md target age band is invalid")
-    characters = screenplay.get("characters")
-    if not isinstance(characters, list) or not characters:
-        raise StoryVideoError("screenplay.md must contain Characters")
-    character_fields = {
-        "name_en",
-        "story_role",
-        "narrative_function_en",
-        "narration_eligibility",
-        "narration_scope_en",
-        "description_en",
-    }
-    character_by_name: dict[str, dict[str, Any]] = {}
-    for character in characters:
-        if not isinstance(character, dict) or set(character) != character_fields:
-            raise StoryVideoError("screenplay.md Characters table schema is invalid")
-        name = character["name_en"]
-        if not isinstance(name, str) or not name.strip() or name in character_by_name:
-            raise StoryVideoError("screenplay.md Character names must be unique")
-        if character["story_role"] not in CHARACTER_STORY_ROLES:
-            raise StoryVideoError(f"Character {name} story_role is invalid")
-        if character["narration_eligibility"] not in NARRATION_ELIGIBILITIES:
-            raise StoryVideoError(f"Character {name} narration eligibility is invalid")
-        for field in (
-            "narrative_function_en",
-            "narration_scope_en",
-            "description_en",
-        ):
-            if not _concrete(character[field]):
-                raise StoryVideoError(f"Character {name} {field} must be concrete")
-        character_by_name[name] = character
-    if not any(item["story_role"] == "lead" for item in characters):
-        raise StoryVideoError("screenplay.md must identify at least one lead character")
-    character_names = set(character_by_name)
+    production = screenplay["production_information"]
+    if production["Production Type"] != "cinematic_widescreen":
+        raise StoryVideoError("screenplay.md Production Type must be cinematic_widescreen")
+    if production["Target Language"] != "English":
+        raise StoryVideoError("screenplay.md Target Language must be English")
+    if production["Target Age Band"] not in TARGET_AGE_BANDS:
+        raise StoryVideoError("screenplay.md Target Age Band is invalid")
+    if not _present(production["Genre"]):
+        raise StoryVideoError("Production Information Genre must be present")
+    for field in (
+        "Educational Theme",
+        "Story Premise",
+        "Dramatic Strategy",
+        "Safety and Culture",
+        "Opening Event",
+        "Ending Event and Obligation",
+    ):
+        if not _concrete(production[field]):
+            raise StoryVideoError(f"Production Information {field} must be concrete")
 
-    environments = screenplay.get("environments")
-    environment_fields = {
-        "environment_id",
-        "logical_name_en",
-        "scene_ids_json",
-        "int_ext",
-        "time_context_en",
-        "environment_facts_en",
-        "story_function_en",
-    }
-    if not isinstance(environments, list) or not environments:
-        raise StoryVideoError("screenplay.md must contain an Environments table")
+    characters = screenplay["characters"]
+    if not characters or not any(item["story_role"] == "lead" for item in characters):
+        raise StoryVideoError("screenplay.md needs at least one lead Character")
+    for item in characters:
+        if item["story_role"] not in CHARACTER_STORY_ROLES:
+            raise StoryVideoError(
+                f"{item['screenplay_character_name_en']} has an invalid Story Role"
+            )
+        if item["narration_eligibility"] not in NARRATION_ELIGIBILITIES:
+            raise StoryVideoError(
+                f"{item['screenplay_character_name_en']} has invalid Narration authority"
+            )
+        if not _concrete(item["narrative_function_en"]) or not _concrete(item["description_en"]):
+            raise StoryVideoError(
+                f"{item['screenplay_character_name_en']} Character fields must be concrete"
+            )
+    for entity in characters:
+        if entity["entity_kind"] not in ENTITY_KINDS:
+            raise StoryVideoError(f"{entity['entity_id']} has an invalid Kind")
+
+    environments = screenplay["environments"]
     scene_environment: dict[str, dict[str, Any]] = {}
     for index, environment in enumerate(environments, start=1):
-        expected_id = f"environment-{index:03d}"
-        if not isinstance(environment, dict) or set(environment) != environment_fields:
-            raise StoryVideoError("screenplay.md Environments table schema is invalid")
-        if (
-            environment["environment_id"] != expected_id
-            or not ENVIRONMENT_ID_RE.fullmatch(str(environment["environment_id"]))
-        ):
-            raise StoryVideoError(f"Environment {index} must be {expected_id}")
-        if environment["int_ext"] not in ENVIRONMENT_KINDS:
-            raise StoryVideoError(f"{expected_id} INT/EXT value is invalid")
-        for field in (
-            "logical_name_en",
-            "time_context_en",
-            "environment_facts_en",
-            "story_function_en",
-        ):
+        expected = f"environment-{index:03d}"
+        if environment["environment_id"] != expected or environment["int_ext"] not in ENVIRONMENT_KINDS:
+            raise StoryVideoError(f"Environment {index} must be {expected} with valid INT/EXT")
+        for field in ("logical_name_en", "time_context_en"):
+            if not _present(environment[field]):
+                raise StoryVideoError(f"{expected} {field} must be present")
+        for field in ("environment_facts_en", "story_function_en"):
             if not _concrete(environment[field]):
-                raise StoryVideoError(f"{expected_id} {field} must be concrete")
-        scene_ids = environment["scene_ids_json"]
-        if not isinstance(scene_ids, list) or not scene_ids:
-            raise StoryVideoError(f"{expected_id} scene_ids_json must be non-empty")
-        for scene_id in scene_ids:
-            if not isinstance(scene_id, str) or not SCENE_ID_RE.fullmatch(scene_id):
-                raise StoryVideoError(f"{expected_id} contains an invalid scene_id")
+                raise StoryVideoError(f"{expected} {field} must be concrete")
+        for scene_id in environment["scene_ids_json"]:
             if scene_id in scene_environment:
-                raise StoryVideoError(f"Scene {scene_id} appears in multiple environments")
+                raise StoryVideoError(f"{scene_id} appears in multiple Environments")
             scene_environment[scene_id] = environment
 
-    scenes = screenplay.get("scenes")
-    scene_fields = {
-        "scene_id",
-        "segment_ids_json",
-        "primary_time_en",
-        "primary_place_en",
-        "narrative_event_en",
-        "entry_boundary",
-        "entry_reason_en",
-        "continuity_reference_segment_id",
-        "continuity_reference_reason_en",
-    }
-    if not isinstance(scenes, list) or not scenes:
-        raise StoryVideoError("screenplay.md must contain a Scenes table")
-    scene_segment_ids: list[str] = []
+    scenes = screenplay["scenes"]
+    scene_segments: list[str] = []
     scene_by_segment: dict[str, str] = {}
     for index, scene in enumerate(scenes, start=1):
-        expected_id = f"scene-{index:03d}"
-        if not isinstance(scene, dict) or set(scene) != scene_fields:
-            raise StoryVideoError("screenplay.md Scenes table schema is invalid")
-        if scene["scene_id"] != expected_id or not SCENE_ID_RE.fullmatch(
-            str(scene["scene_id"])
-        ):
-            raise StoryVideoError(f"Scene {index} must be {expected_id}")
-        entry_boundary = scene["entry_boundary"]
-        if entry_boundary not in SCENE_ENTRY_BOUNDARIES:
-            raise StoryVideoError(f"{expected_id} entry_boundary is invalid")
-        if (index == 1) != (entry_boundary == "opening"):
-            raise StoryVideoError(
-                "Only scene-001 may use entry_boundary opening"
-            )
+        expected = f"scene-{index:03d}"
+        if scene["scene_id"] != expected or scene["entry_boundary"] not in SCENE_ENTRY_BOUNDARIES:
+            raise StoryVideoError(f"Scene {index} must be {expected} with valid Entry Boundary")
+        if (index == 1) != (scene["entry_boundary"] == "opening"):
+            raise StoryVideoError("Only scene-001 may use opening")
+        for field in ("primary_time_en", "primary_place_en"):
+            if not _present(scene[field]):
+                raise StoryVideoError(f"{expected} {field} must be present")
         for field in (
-            "primary_time_en",
-            "primary_place_en",
             "narrative_event_en",
             "entry_reason_en",
+            "continuity_reference_reason_en",
         ):
-            if not _concrete(scene[field]):
-                raise StoryVideoError(f"{expected_id} {field} must be concrete")
-        continuity_reference_segment_id = scene[
-            "continuity_reference_segment_id"
-        ]
-        if continuity_reference_segment_id != "none" and not SEGMENT_ID_RE.fullmatch(
-            str(continuity_reference_segment_id)
-        ):
-            raise StoryVideoError(
-                f"{expected_id} continuity reference Segment is invalid"
-            )
-        segment_ids = scene["segment_ids_json"]
-        if not isinstance(segment_ids, list) or not segment_ids:
-            raise StoryVideoError(f"{expected_id} segment_ids_json must be non-empty")
-        for segment_id in segment_ids:
-            if not isinstance(segment_id, str) or not SEGMENT_ID_RE.fullmatch(segment_id):
-                raise StoryVideoError(f"{expected_id} contains an invalid segment_id")
+            if not _concrete(
+                scene[field], allow_none=field == "continuity_reference_reason_en"
+            ):
+                raise StoryVideoError(f"{expected} {field} must be concrete")
+        for segment_id in scene["segment_ids_json"]:
             if segment_id in scene_by_segment:
-                raise StoryVideoError(
-                    f"{segment_id} appears in multiple Scenes"
-                )
-            scene_by_segment[segment_id] = expected_id
-            scene_segment_ids.append(segment_id)
-    if set(scene_environment) != {scene["scene_id"] for scene in scenes}:
-        raise StoryVideoError(
-            "Scenes table and Environments Scene bindings must match exactly"
-        )
+                raise StoryVideoError(f"{segment_id} appears in multiple Scenes")
+            scene_by_segment[segment_id] = expected
+            scene_segments.append(segment_id)
+    if set(scene_environment) != {item["scene_id"] for item in scenes}:
+        raise StoryVideoError("Scenes and Environment bindings differ")
+    if set(screenplay["scene_dramatic_contracts"]) != {item["scene_id"] for item in scenes}:
+        raise StoryVideoError("Every Scene needs exactly one Scene Dramatic Contract")
 
-    continuity_states = screenplay.get("continuity_states")
-    if not isinstance(continuity_states, list) or not continuity_states:
-        raise StoryVideoError("screenplay.md must contain Continuity States")
-    state_by_id: dict[str, dict[str, str]] = {}
-    for index, state_record in enumerate(continuity_states, start=1):
-        expected_id = f"state-{index:03d}"
-        if (
-            not isinstance(state_record, dict)
-            or set(state_record) != {"state_id", "state_json"}
-            or state_record["state_id"] != expected_id
-            or not STATE_ID_RE.fullmatch(str(state_record["state_id"]))
-        ):
-            raise StoryVideoError(f"Continuity State {index} must be {expected_id}")
-        _validate_state(state_record["state_json"], label=expected_id)
-        state_by_id[expected_id] = state_record["state_json"]
+    states = screenplay["continuity_states"]
+    for index, state in enumerate(states, start=1):
+        expected = f"state-{index:03d}"
+        expected_parent = "none" if index == 1 else f"state-{index - 1:03d}"
+        if state["state_id"] != expected or state["parent_state_ref"] != expected_parent:
+            raise StoryVideoError(
+                f"Continuity State {index} must be {expected} with parent {expected_parent}"
+            )
+        if not _concrete(state["changed_facts_en"]) or not _concrete(state["change_reason_en"]):
+            raise StoryVideoError(f"{expected} needs concrete changed facts and reason")
 
-    segments = screenplay.get("segments")
-    if not isinstance(segments, list) or not segments:
-        raise StoryVideoError("screenplay.md must contain at least one Segment")
-    boundaries = screenplay.get("continuity_boundaries")
-    if not isinstance(boundaries, list) or len(boundaries) != len(segments) - 1:
-        raise StoryVideoError(
-            "screenplay.md Continuity Boundaries must cover every adjacent pair once"
-        )
+    segments = screenplay["segments"]
+    boundaries = screenplay["continuity_boundaries"]
+    if not segments:
+        raise StoryVideoError("screenplay.md requires at least one Scene Unit")
+    if len(boundaries) != len(segments) - 1:
+        raise StoryVideoError("Continuity Boundaries must cover every adjacent Segment once")
+    state_ids = {item["state_id"] for item in states}
     for index, boundary in enumerate(boundaries, start=1):
-        expected_id = f"boundary-{index:03d}"
+        expected = f"boundary-{index:03d}"
         if (
-            not isinstance(boundary, dict)
-            or boundary.get("boundary_id") != expected_id
-            or not BOUNDARY_ID_RE.fullmatch(str(boundary.get("boundary_id") or ""))
+            boundary["boundary_id"] != expected
+            or boundary["from_segment_id"] != f"segment-{index:03d}"
+            or boundary["to_segment_id"] != f"segment-{index + 1:03d}"
+            or boundary["from_state_ref"] not in state_ids
+            or boundary["to_state_ref"] not in state_ids
+            or boundary["handoff"] not in INCOMING_VISUAL_REQUIREMENTS
+            or boundary["transition_type"] not in TRANSITION_DESIGN_TYPES - {"final_end"}
         ):
-            raise StoryVideoError(f"Continuity Boundary {index} must be {expected_id}")
-        if (
-            boundary.get("from_segment_id") != f"segment-{index:03d}"
-            or boundary.get("to_segment_id") != f"segment-{index + 1:03d}"
-            or boundary.get("from_state_ref") not in state_by_id
-            or boundary.get("to_state_ref") not in state_by_id
-        ):
-            raise StoryVideoError(f"{expected_id} Segment or State binding is invalid")
-        _expand_anchor_policy(
-            boundary,
-            from_state=state_by_id[boundary["from_state_ref"]],
-            to_state=state_by_id[boundary["to_state_ref"]],
-        )
+            raise StoryVideoError(f"Continuity Boundary {index} is invalid")
+        for field in ("dramatic_reason_en", "audio_handoff_en", "continuity_handoff_en"):
+            if not _concrete(boundary[field]):
+                raise StoryVideoError(f"{expected} {field} must be concrete")
+
     runtime = 0
-    known_dramatic_beat_ids: set[str] = set()
-    scene_dramatic_contracts: dict[str, dict[str, Any]] = {}
+    known_beats: set[str] = set()
+    action_ids: list[str] = []
+    line_ids: list[str] = []
     for index, segment in enumerate(segments, start=1):
-        if segment.get("id") != index:
-            raise StoryVideoError("screenplay.md Segment ids must be consecutive")
-        blocks = segment.get("blocks")
-        actions = segment.get("action_blocks")
-        if (
-            not isinstance(blocks, list)
-            or len(blocks) < MINIMUM_SEGMENT_BLOCK_COUNT
-            or blocks[0].get("type") != "action"
-            or blocks[-1].get("type") != "action"
-            or not isinstance(actions, list)
-            or len(actions) < 2
-        ):
-            raise StoryVideoError(
-                f"screenplay.md Segment {index} must contain at least "
-                f"{MINIMUM_SEGMENT_BLOCK_COUNT} beats, open with a concrete Action, "
-                "develop the assigned dramatic phase, and close with an explicit "
-                "boundary Action"
-            )
-        plan = segment.get("story_plan")
-        if not isinstance(plan, dict) or tuple(plan) != SCREENPLAY_SEGMENT_FIELDS:
-            raise StoryVideoError(f"screenplay.md Segment {index} story_plan schema is invalid")
-        segment_id = f"segment-{index:03d}"
-        if plan["segment_id"] != segment_id or not SEGMENT_ID_RE.fullmatch(plan["segment_id"]):
-            raise StoryVideoError(f"screenplay.md Segment {index} segment_id is invalid")
-        if not SCENE_ID_RE.fullmatch(str(plan["scene_id"])):
-            raise StoryVideoError(f"{segment_id} scene_id is invalid")
+        plan = segment["story_plan"]
+        expected = f"segment-{index:03d}"
+        if segment["id"] != index or plan["segment_id"] != expected:
+            raise StoryVideoError("Scene Units and Segment IDs must be consecutive")
+        if scene_by_segment.get(expected) != plan["scene_id"]:
+            raise StoryVideoError(f"{expected} disagrees with Scenes table")
+        if not SLUGLINE_RE.fullmatch(segment["heading_en"]):
+            raise StoryVideoError(f"{expected} has an invalid Slugline")
         environment = scene_environment.get(plan["scene_id"])
-        if environment is None:
-            raise StoryVideoError(
-                f"{segment_id} scene_id is missing from the Environments table"
-            )
-        heading_kind = str(segment.get("heading_en") or "").split(".", 1)[0]
-        if environment["int_ext"] != "MIXED" and environment["int_ext"] != heading_kind:
-            raise StoryVideoError(
-                f"{segment_id} slugline conflicts with {environment['environment_id']} INT/EXT"
-            )
-        duration = plan["estimated_duration_seconds"]
-        if isinstance(duration, bool) or not isinstance(duration, int) or not 4 <= duration <= 15:
-            raise StoryVideoError(f"{segment_id} duration must be 4-15 seconds")
-        runtime += duration
+        slug_kind = segment["heading_en"].split(".", 1)[0]
+        if environment is None or (
+            environment["int_ext"] != "MIXED" and environment["int_ext"] != slug_kind
+        ):
+            raise StoryVideoError(f"{expected} Slugline conflicts with its Environment")
         if plan["dramatic_workload"] not in DIALOGUE_OCCUPANCY_LIMITS:
-            raise StoryVideoError(
-                f"{segment_id} dramatic_workload must be one of "
-                f"{sorted(DIALOGUE_OCCUPANCY_LIMITS)}"
-            )
+            raise StoryVideoError(f"{expected} has an invalid Workload")
+        duration = plan["estimated_duration_seconds"]
+        if isinstance(duration, bool) or not 4 <= duration <= 15:
+            raise StoryVideoError(f"{expected} Duration Seconds must be 4-15")
+        runtime += duration
+        shot_duration = sum(shot["duration_seconds"] for shot in segment["shots"])
+        if abs(shot_duration - duration) > 1e-6:
+            raise StoryVideoError(f"{expected} Shot durations must equal Scene Unit duration")
+        if not any(shot["audio_cues"] for shot in segment["shots"]):
+            raise StoryVideoError(f"{expected} requires at least one authored audio event")
+        for shot in segment["shots"]:
+            action_ids.append(shot["shot_id"])
+            if shot["dialogue"] is not None:
+                line_ids.append(shot["dialogue"]["line_id"])
         validate_cinematic_segment_contract(
-            segment_id=segment_id,
+            segment_id=expected,
             scene_id=plan["scene_id"],
-            scene_contract=plan["scene_dramatic_contract_json"],
-            dramatic_beats=plan["dramatic_beats_json"],
-            blocks=blocks,
-            known_beat_ids=known_dramatic_beat_ids,
+            scene_contract=plan["scene_dramatic_contract"],
+            shots=segment["shots"],
+            known_beat_ids=known_beats,
         )
-        prior_scene_contract = scene_dramatic_contracts.get(plan["scene_id"])
-        if prior_scene_contract is None:
-            scene_dramatic_contracts[plan["scene_id"]] = plan[
-                "scene_dramatic_contract_json"
-            ]
-        elif prior_scene_contract != plan["scene_dramatic_contract_json"]:
-            raise StoryVideoError(
-                f"{segment_id} must repeat the same Scene dramatic contract across its Scene"
-            )
-        incoming_visual_requirement = plan["incoming_visual_requirement"]
-        if incoming_visual_requirement not in INCOMING_VISUAL_REQUIREMENTS:
-            raise StoryVideoError(
-                f"{segment_id} incoming_visual_requirement is invalid"
-            )
-        if index == 1 and incoming_visual_requirement != "independent":
-            raise StoryVideoError(
-                "segment-001 must use independent as the project opening"
-            )
-        if index > 1:
-            predecessor_plan = segments[index - 2]["story_plan"]
-            validate_adjacent_visual_boundary_contract(
-                segment_id=segment_id,
-                predecessor_plan=predecessor_plan,
-                current_plan=plan,
-            )
-        for field in (
-            "location_time_environment_en",
-            "narrative_purpose_en",
-        ):
-            if not _concrete(plan[field]):
-                raise StoryVideoError(f"{segment_id} {field} must be concrete")
-            if FORBIDDEN_CROSS_CLIP_DEPENDENCY_RE.search(plan[field]):
-                raise StoryVideoError(
-                    f"{segment_id} contains forbidden previous-frame/video dependency"
-                )
-        present = plan["characters_json"]
-        if (
-            not isinstance(present, list)
-            or any(not isinstance(name, str) or name not in character_names for name in present)
-        ):
-            raise StoryVideoError(f"{segment_id} characters_json is invalid")
-        _validate_state(plan["start_state_json"], label=f"{segment_id}.start_state_json")
-        _validate_state(plan["end_state_json"], label=f"{segment_id}.end_state_json")
-        final = index == len(segments)
-        _validate_transition(plan["transition_design_json"], final=final, segment_id=segment_id)
-        if (
-            plan["transition_design_json"]["outgoing_visible_en"]
-            != blocks[-1].get("text_en")
-        ):
-            raise StoryVideoError(
-                f"{segment_id} transition outgoing visible state must equal its closing Action"
-            )
-        anchors = segment["derived_continuity"]["anchors"]
-        if index == 1:
-            if anchors != []:
-                raise StoryVideoError("segment-001 derived continuity anchors must be []")
-        else:
-            if not isinstance(anchors, list) or len(anchors) != len(CONTINUITY_CATEGORIES):
-                raise StoryVideoError(f"{segment_id} must anchor every continuity category")
-            categories: list[str] = []
-            for anchor in anchors:
-                if not isinstance(anchor, dict) or set(anchor) != CONTINUITY_ANCHOR_KEYS:
-                    raise StoryVideoError(f"{segment_id} has an invalid continuity Anchor")
-                category = anchor["category"]
-                categories.append(category)
-                if anchor["status"] not in CONTINUITY_ANCHOR_STATUSES:
-                    raise StoryVideoError(f"{segment_id} Anchor status is invalid")
-                if not all(
-                    _concrete(anchor[field], allow_not_applicable=field != "reason_en")
-                    for field in ("from_en", "to_en", "reason_en")
-                ):
-                    raise StoryVideoError(f"{segment_id} Anchor facts must be concrete")
-                if anchor["status"] == "preserve" and anchor["from_en"] != anchor["to_en"]:
-                    raise StoryVideoError(f"{segment_id} preserve Anchor changes state")
-                if anchor["status"] == "not_applicable" and (
-                    anchor["from_en"] != "not_applicable"
-                    or anchor["to_en"] != "not_applicable"
-                ):
-                    raise StoryVideoError(
-                        f"{segment_id} not_applicable Anchor must bind literal not_applicable facts"
-                    )
-            if tuple(categories) != CONTINUITY_CATEGORIES:
-                raise StoryVideoError(f"{segment_id} Anchor categories are out of order")
-        for entry in segment.get("spoken_entries") or []:
-            speaker = entry.get("speaker_en")
-            if speaker not in present:
-                raise StoryVideoError(f"{segment_id} dialogue speaker must appear in characters_json")
-            if entry.get("speaker_mode") == "V.O." and character_by_name[speaker][
-                "narration_eligibility"
-            ] == "not_allowed":
-                raise StoryVideoError(
-                    f"{segment_id} uses {speaker} as V.O. despite not_allowed narration eligibility"
-                )
+        spoken_entries = [
+            shot["dialogue"]
+            for shot in segment["shots"]
+            if shot["dialogue"] is not None
+        ]
         dialogue_words = sum(
-            len(WORD_RE.findall(str(entry.get("spoken_text_en") or "")))
-            for entry in segment.get("spoken_entries") or []
+            len(WORD_RE.findall(item["spoken_text_en"])) for item in spoken_entries
         )
-        minimum_seconds = (
+        dialogue_seconds = (
             dialogue_words / DIALOGUE_WORDS_PER_SECOND
-            + len(segment.get("spoken_entries") or [])
-            * DIALOGUE_TURN_ALLOWANCE_SECONDS
-            + MINIMUM_ACTION_REACTION_SECONDS
+            + len(spoken_entries) * DIALOGUE_TURN_ALLOWANCE_SECONDS
         )
-        if duration + 1e-6 < minimum_seconds:
-            raise StoryVideoError(
-                f"{segment_id} duration is below its dialogue/action floor of {minimum_seconds:.1f}s"
-            )
-    if screenplay.get("total_duration_seconds") != runtime or runtime > 240:
-        raise StoryVideoError("screenplay.md total duration is inconsistent or exceeds 240 seconds")
-    for current, successor in zip(segments, segments[1:]):
-        if (
-            current["story_plan"]["transition_design_json"]["incoming_visible_en"]
-            != successor["blocks"][0].get("text_en")
-        ):
-            raise StoryVideoError(
-                f"{current['story_plan']['segment_id']} transition incoming visible state "
-                "must equal the successor opening Action"
-            )
-    used_scene_ids = {segment["story_plan"]["scene_id"] for segment in segments}
-    if set(scene_environment) != used_scene_ids:
-        unused = sorted(set(scene_environment) - used_scene_ids)
-        raise StoryVideoError(
-            "Environments table contains unused Scene IDs: " + ", ".join(unused)
-        )
-    expected_segment_ids = [
-        f"segment-{index:03d}" for index in range(1, len(segments) + 1)
-    ]
-    if scene_segment_ids != expected_segment_ids:
-        raise StoryVideoError(
-            "Scenes must partition all Segments once, in screenplay order, using "
-            "contiguous Segment ranges"
-        )
-    segment_index_by_id = {
-        segment_id: index for index, segment_id in enumerate(expected_segment_ids)
-    }
-    for scene in scenes:
-        reference_id = scene["continuity_reference_segment_id"]
-        reason = scene["continuity_reference_reason_en"]
-        entry_id = scene["segment_ids_json"][0]
-        if reference_id == "none":
-            if reason != "none":
+        if dialogue_seconds / duration > DIALOGUE_OCCUPANCY_LIMITS[plan["dramatic_workload"]] + 1e-6:
+            raise StoryVideoError(f"{expected} dialogue occupancy exceeds its Workload limit")
+        if duration + 1e-6 < dialogue_seconds + MINIMUM_ACTION_REACTION_SECONDS:
+            raise StoryVideoError(f"{expected} duration is below its dialogue/action floor")
+        call_map = {
+            call["entity_id"]: call for call in segment["performance_calls"]
+        }
+        character_map = {item["entity_id"]: item for item in characters}
+        for entry in spoken_entries:
+            speaker_id = entry["speaker_entity_id"]
+            if speaker_id not in call_map or speaker_id not in character_map:
                 raise StoryVideoError(
-                    f"{scene['scene_id']} without a continuity reference must use reason 'none'"
+                    f"{entry['line_id']} lacks declared speaker staging or gaze/addressee"
                 )
-            continue
-        if (
-            reference_id not in segment_index_by_id
-            or segment_index_by_id[reference_id] >= segment_index_by_id[entry_id]
-        ):
-            raise StoryVideoError(
-                f"{scene['scene_id']} continuity reference must name an earlier Segment"
+            if (
+                call_map[speaker_id]["presence_mode"] == "voice_over"
+                and character_map[speaker_id]["narration_eligibility"]
+                == "not_allowed"
+            ):
+                raise StoryVideoError(
+                    f"{character_map[speaker_id]['screenplay_character_name_en']} cannot narrate V.O."
+                )
+
+        completion_mode = segment["shots"][-1]["completion_mode"]
+        if index < len(segments):
+            handoff = boundaries[index - 1]["handoff"]
+            if (completion_mode == "open") != (handoff == "continuous_motion"):
+                raise StoryVideoError(
+                    f"{expected} final Completion State must agree with its Handoff"
+                )
+        elif completion_mode != "completed":
+            raise StoryVideoError("The final Scene Unit must end with completed action")
+        if index > 1:
+            validate_adjacent_visual_boundary_contract(
+                segment_id=expected,
+                predecessor_scene_id=segments[index - 2]["story_plan"]["scene_id"],
+                current_scene_id=plan["scene_id"],
+                boundary=boundaries[index - 2],
+                predecessor_final_shot=segments[index - 2]["shots"][-1],
             )
-        source_scene_id = scene_by_segment[reference_id]
-        if (
-            scene_environment[source_scene_id]["environment_id"]
-            != scene_environment[scene["scene_id"]]["environment_id"]
-        ):
-            raise StoryVideoError(
-                f"{scene['scene_id']} continuity reference must return to the same environment"
-            )
-        if len(reason.split()) < 5:
-            raise StoryVideoError(
-                f"{scene['scene_id']} continuity reference reason must be concrete"
-            )
-        entry_segment = segments[segment_index_by_id[entry_id]]
-        if entry_segment["story_plan"]["incoming_visual_requirement"] != "state_match":
-            raise StoryVideoError(
-                f"{entry_id} must use state_match for its Scene continuity reference"
-            )
-    for segment in segments:
-        segment_id = segment["story_plan"]["segment_id"]
-        scene_id = segment["story_plan"]["scene_id"]
-        if scene_by_segment.get(segment_id) != scene_id:
-            raise StoryVideoError(
-                f"{segment_id} scene_id disagrees with the Scenes table"
-            )
+
+    expected_actions = [f"A-{index:03d}" for index in range(1, len(action_ids) + 1)]
+    expected_lines = [f"L-{index:03d}" for index in range(1, len(line_ids) + 1)]
+    if action_ids != expected_actions:
+        raise StoryVideoError("Shot IDs must be globally consecutive in screenplay order")
+    if line_ids != expected_lines:
+        raise StoryVideoError("Dialogue Line IDs must be globally consecutive in screenplay order")
+    try:
+        declared_runtime = int(production["Estimated Runtime Seconds"])
+    except ValueError as exc:
+        raise StoryVideoError("Estimated Runtime Seconds must be an integer") from exc
+    if runtime != declared_runtime or runtime > 240:
+        raise StoryVideoError("Screenplay runtime is invalid or disagrees across tables")
+    if scene_segments != [f"segment-{index:03d}" for index in range(1, len(segments) + 1)]:
+        raise StoryVideoError("Scenes must partition Segments once in order")
+    _validate_performance(screenplay)
 
 
 def load_screenplay_file(path: str | Path) -> dict[str, Any]:
@@ -1459,34 +1418,3 @@ def load_screenplay_file(path: str | Path) -> dict[str, Any]:
     except (FileNotFoundError, UnicodeDecodeError) as exc:
         raise StoryVideoError(f"Invalid screenplay file: {screenplay_path}") from exc
     return parse_screenplay_markdown(text)
-
-
-def screenplay_spoken_entries(screenplay: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        {
-            "speaker_en": entry["speaker_en"],
-            "delivery_en": screenplay_delivery_cue(entry),
-            "spoken_text_en": entry["spoken_text_en"],
-        }
-        for segment in screenplay["segments"]
-        for entry in segment.get("spoken_entries", [])
-    ]
-
-
-def screenplay_delivery_cue(entry: dict[str, Any]) -> str | None:
-    cues: list[str] = []
-    mode = entry.get("speaker_mode")
-    if isinstance(mode, str) and mode:
-        cues.append(mode)
-    delivery = entry.get("delivery_en")
-    if isinstance(delivery, str) and delivery.strip():
-        cues.append(delivery.strip())
-    return "; ".join(cues) or None
-
-
-def screenplay_action_blocks(screenplay: dict[str, Any]) -> list[str]:
-    return [
-        action
-        for segment in screenplay["segments"]
-        for action in segment.get("action_blocks", [])
-    ]

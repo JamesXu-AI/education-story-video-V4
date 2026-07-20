@@ -1,14 +1,19 @@
 # Production asset contract
 
-Use `direct-production-design/assets.json` as the single current production-design
+Use repository-root `assets/assets.json` as the single current production-design
 plan and base-design catalog. Store all asset media and generation evidence under
-`direct-production-design/assets/`, with one folder per asset.
+repository-root `assets/`, with one folder per asset. A task directory never owns,
+mirrors, or symlinks asset media.
 Allowed types are `character`, `costume`, `prop`, `location`, `location_master`,
 `sound`, and `ensemble_roster`. Each dialogue-character record also carries the
 model-authored exhaustive `body_topology` used by both still-image and Seedance
-generation. Each record has one canonical ID,
-one declared type, a current `planned`, `ready`, or `failed` status, a concise
-definition, and task-local media plus a provider-accessible URI after generation.
+generation. Each final record has one canonical ID, one declared type, a concise
+definition, and repository-owned media plus a provider-accessible URI. Transient
+`planned`, `ready`, and `failed` lifecycle state exists only while the builder runs;
+it is removed from the final reusable catalog.
+Persist only each object's stable unsigned URL. TOS query signatures such as
+`X-Tos-*` are temporary transport credentials and are forbidden in the catalog;
+the upload layer derives the public URL directly from bucket, endpoint, and key.
 Do not store approvals, hashes, provider attempts, cache metadata, or history in the
 catalog. Briefs, prompts and provider request/response evidence belong beside the
 media inside the asset folder.
@@ -67,9 +72,12 @@ does not carry a global Look image or style-reference ID.
 
 ## Character and environment depth
 
-Each character includes stable identity and a concrete performance definition:
-core desire/belief/pressure, emotional arc, attention, listening, speech
-preparation, embodied acting, settling, and forbidden empty behavior. Each
+Each character is a reusable actor card, not a role assignment for one plot. Its
+`actor_profile` contains only `name_en`, `personality_en`, `screen_presence_en`, and
+`acting_range_en`. Do not persist screenplay objectives, Scene/Segment behavior,
+relationships, current emotional arcs, line delivery, victory, defeat, injury, or
+other plot state in the character record. Those decisions remain in the task-side
+screenplay, performance map, Storyboard, and appearance-state assets. Each
 production-ready set uses a location master with navigable geometry and declared
 fixed props.
 
