@@ -1,215 +1,181 @@
 ---
 name: direct-production-design
-description: "Own the visual bible and derive the current Seedance reference system from story/performance facts: dialogue identities, exact appearance/injury states, silent-role groups, props, and location masters. Consume virtual-production Prompt/assets.json semantic incompatibility requests, repair the semantic plan or exact asset binding, and keep every catalog declaration unambiguous. Never require the screenplay module to read or plan art, and never change story, performance, or cinematography."
+description: "Understand the approved story and screenplay, then author exact visual-asset plans for characters, silent groups, props, appearance states, dressed Location masters, and the semantic split between embedded background NPCs and independent performers. Execute those plans without changing story, performance, or cinematography."
 ---
 
 # Direct Production Design
 
-## Skill invocation boundary
+## Boundary
 
-While executing a production task under this Skill, never invoke, load, delegate
-to, or depend on any Skill outside this repository. Repository-local department
-Skills explicitly named by this project remain internal and may collaborate under
-their declared ownership boundaries. The sole system-Skill exception is
-`skill-creator`, and only when the user explicitly asks to create or maintain this
-project's own Skill files; never use it to perform story or media-production work.
+Own production design, the visual bible, model-authored image prompts, image assets,
+and character voice references. Do not write story, dialogue, performance calls,
+camera design, Storyboards, Seedance Prompts, editing, subtitles, or final sound.
+Use only repository-local providers. Do not call another image Skill.
 
-Own art direction, production design, the visual bible, and image-asset execution.
-Use only the repository-local Seedream adapter. Every external call has a one-hour
-timeout. Never call another image Skill.
+Begin only after the screenplay role-asset gate returns `PASS` and image generation
+is unlocked. Read `task.json`, `story.md`, the current screenplay and performance
+tables, the current Storyboard when present, and the visual standard. An optional
+aesthetic study is offline evidence only; its source frames never enter a provider
+request.
 
-## Inputs and authority
+## Single model-authored plan
 
-Asset planning starts only after
-`screenplay-writer/scripts/validate_role_asset_scope.py` returns `status: PASS` and
-`image_asset_generation: UNLOCKED`. Read `task.json`, `story.md`, the current
-`screenplay-writer/screenplay.md`, the current Storyboard when present, and the
-[Soft & Cute 3D Healing Animation Visual Standard](references/soft-cute-3d-healing-visual-standard.md).
-When
-`direct-production-design/aesthetic-reference/manifest.json` exists inside the
-current task, also read its complete study and validated frame bindings before
-authoring the visual bible or any image request. The task story, cultural locks,
-screenplay, its Performance Entity/Call tables, and current approved asset authorities always outrank
-that aesthetic evidence.
+Before any provider call, the production-design model must author the complete
+`direct-production-design/production-design-plan.json`. It must contain every
+semantic catalog field, media path, exact ordered reference binding, and complete
+structured `generation_prompt` for every asset.
 
-The source video, selected source frames and contact sheets are offline analysis
-evidence only and never enter any provider request. Translate only general shape,
-material, palette and atmosphere observations into the project's shared textual
-visual contract and direct asset prompts. Never create or wait for a global Look
-image. Never copy a reference identity, costume, prop, location, exact composition,
-story action or omission.
-Production design owns appearance and environment design, but cannot change story,
-presence, dialogue, action, camera, light, or Segment boundaries.
+Python is an executor and validator only. It may:
 
-Understand the screenplay and current Storyboard before deciding the complete asset
-set. Write repository-root `assets/assets.json` before the first provider call,
-then update each asset record from `planned` to `ready` or `failed` as execution
-finishes. Every asset entry script re-evaluates the fast role gate before any
-external image call.
+- reject missing, unknown, contradictory, or stale fields;
+- compare model fields with writer-owned role and Scene coverage;
+- serialize the exact `generation_prompt` JSON object;
+- schedule the explicitly authored reference graph;
+- attach observed local paths and provider URLs after generation.
 
-When
-`.pending/virtual-production/asset-rework-requests/segment-NNN.json` exists, treat
-it as a current blocking defect report from the final Prompt/`assets.json` semantic
-gate. Read its required versus catalog facts, conflict domains, affected asset IDs,
-and repair actions before changing the asset plan. Repair the semantic plan,
-catalog row, or exact-state asset binding; never bind a generic/normal character
-row when the Prompt requires a distinct injured, transformed, disguised, wet,
-dirty, or alternate-costume state.
+Python must not infer, default, complete, rewrite, merge, prepend, append, or repair
+any semantic field or Prompt content. It must not derive an asset ID, description,
+member roster, appearance state, role treatment, reference list, background,
+expression, anatomy, style instruction, exclusion, or location fact. If any such
+field is absent or wrong, stop and rewrite the model plan.
 
-## Outputs
+## Prompt contract
 
-Maintain:
+Every asset owns exactly one structured `generation_prompt` with these exact keys:
 
-- `visual-production-spec.md`;
-- the task-local aesthetic-reference manifest and study when an aesthetic source
-  is supplied;
-- the model-authored task-semantic `production-design-plan.json`;
-- the repository-owned single plan/catalog `assets/assets.json` and media root
-  `assets/`; neither may live under a task directory;
-- one full-body final-look character portrait and one unique speaker voice WAV/URI
-  for every dialogue-owning entity; a portrait includes a prop/accessory only when
-  production design determines that the current story, identity or continuity
-  requires it, plus a motivated expression, active attention and
-  readable thought; one art-derived group portrait per silent
-  screenplay narrative role; appearance states, costumes, props, and location
-  masters;
-- `location-continuity-packages.json`, containing topology and landmark text only.
+- `intent_en`
+- `subject_en`
+- `background_en`
+- `composition_en`
+- `continuity.reference_asset_ids`
+- `continuity.locks_en`
+- `style_en`
+- `exclusions_en`
 
-The Scene-cast location master is the only full-frame environment image authority.
-It contains every current on-screen role asset used by its bound Scene, plus the
-stable location and fixed props. Reuse it directly for every Scene and Segment bound to that location.
-Do not generate a Scene background, global background, camera background, or other
-full-frame derivative of a location master. When time, weather, light, set state,
-topology, or fixed props materially change, author a distinct location master in
-`production-design-plan.json` and bind only the affected Scenes to it.
+The provider receives the canonical JSON serialization of this object, unchanged.
+No wrapper, suffix, global negative block, emergency correction, story example, or
+second style paragraph may be added by code or by a later department.
+The complete serialized image Prompt is limited to 3,500 characters. Patch or
+override language is invalid; rewrite the object coherently instead of adding a
+correction.
 
-Each character folder owns its image, voice WAV, brief, prompt, provider request
-and provider response together; voice description and URI live only in `assets.json`.
-There is no shared directory,
-speaker manifest, cast-binding manifest, candidate directory, pending directory or
-intermediate character-name mapping. A dialogue character's asset ID is exactly its
-performance `entity_id`; silent entity membership is declared directly by its
-ensemble-roster record in `assets.json`. Every project-level speaker still requires
-one unique, provider-accessible PCM WAV. Never reuse one speaker audio for another
-character.
+Character, appearance-state, prop, and ensemble assets use the single exact
+pure-white background authority declared by the plan contract. A dressed Location
+master describes its real environment instead. Do not mention a forest,
+room, or other Scene environment in a pure-white asset Prompt.
 
-Every task-semantic character plan also owns a model-authored `body_topology` with
-one body plan, exhaustive counted limb sets, counted non-limb appendages, total limb
-count, and a positive topology lock. Codex derives this from the actual character
-and approved portrait; generic code must never infer it from a name or species
-keyword. Every downstream character or character-owned appearance-state image
-binding must carry this exact topology into its Seedance Prompt.
+The style section uses the single exact project style authority. Do not imitate a
+brand, studio, franchise, artist, renderer, or protected identity.
 
-Every task-semantic character plan also owns `voice_description_en`, one exact
-`voice_sample_text_en`, and an explicit provider `voice_speech_rate`. Generate the
-sample through the repository Seed Audio provider at the natural duration determined
-by that exact text, voice direction, and speech rate. Normalize only the transport
-format to 48 kHz, stereo, 16-bit PCM; never pad, trim, stretch, compress, or otherwise
-time-scale it to a fixed duration. The sample text must be a short line or excerpt
-faithful to that current character. Persist `voice.brief.json`, provider
-request/response evidence, the canonical `voice.wav`, and its fresh URI together in
-the character folder. Different sample texts are expected to produce different total
-durations.
+## Character actors
 
-Before running the deterministic builder, the active production-design model must
-read the current `story.md`, screenplay and its performance tables, and aesthetic translation,
-then author `direct-production-design/production-design-plan.json`. This is the only
-task-specific design authority for dialogue-character appearance, independently
-useful props, voice direction/sample/rate, appearance states, locations, topology,
-landmarks, fixed-prop bindings, and one semantic `character_background_location_id`.
-Use that location's model-authored environment description as the visible background
-authority for every character, costume-state, and ensemble asset. These images must
-not use a plain, solid-color, studio, catalogue, cutout, empty, or transparent
-background. Generate the final Scene-cast location image only after every role asset
-used by its bound Scene, and include the exhaustive current on-screen cast. If two
-Scenes at one place have different casts, author separate location assets. It must
-describe the actual current story rather than
-fill categories or copy examples.
+Create one full-body identity image and one unique voice WAV/URI for every speaking
+entity. A character record is a reusable actor card, not one plot assignment. Its
+`actor_profile` contains only:
 
-Repository scripts are generic executors. They may validate IDs and cross-file
-coverage, compile prompts, build an asset dependency graph, and schedule generation,
-but must never branch on a project character, species, object, country, room, or
-location name. Examples in documentation are explanatory only and may not become
-keyword logic. If the semantic plan is absent, stale, contradictory, or incomplete,
-stop before image generation and have the production-design model rewrite it; do not
-fall back to hardcoded defaults.
+- `name_en`
+- `personality_en`
+- `screen_presence_en`
+- `acting_range_en`
 
-Aggregate speech ownership across the full current screenplay before generating any
-cast image. Only entities with at least one dialogue line receive a single-character
-image. Treat every `lead`, every `supporting` role and every other dialogue-owning
-individual as a main story character. Every non-human character must use the natural
-species body plan authored in `body_topology`: quadrupeds remain four-legged,
-insects retain their natural leg and wing plan, and birds retain two legs plus two
-wings. Do not add an upright humanized torso, arms, hands, feet, or bipedal stance to
-an animal.
+Do not place story objectives, relationships, first-line delivery, current emotion,
+victory, defeat, injury, death, repentance, or Scene/Segment behavior in the actor
+profile or identity Prompt. Temporary visible states belong in explicit
+character-owned appearance-state assets.
 
-All characters, including silent group members, must show characterful inner life
-through gaze, expression, species-appropriate posture, attention and intention.
-Every member must use exactly one coherent natural species body plan. Expression
-must never add arms or hands to a quadruped, remove or repurpose insect legs, or add
-arms to a bird beyond its two wings and two legs. Extra, duplicated, missing, fused,
-detached, hybrid, or humanized animal limbs are forbidden.
-Blank wildlife portraits are forbidden. A final-look portrait
-may be prop-free. Production design decides whether an independent prop asset is
-needed by asking whether the object carries story action, ownership/state change,
-repeat continuity, character recognition, or fixed-location interaction. Do not
-generate a prop merely to decorate a portrait, fill an asset category, or satisfy a
-per-character quota. Ordinary wardrobe and set dressing remain inside character or
-location design unless a separate reference is materially useful.
+Every character plan carries a model-authored exhaustive `body_topology`. Natural
+quadrupeds remain four-legged; birds retain two legs and two wings; insects retain
+their authored leg and wing plan. Expression never authorizes extra arms, hands,
+legs, wings, tails, trunks, or hybrid anatomy. Code validates counts but never
+guesses anatomy from a name or species word.
 
-Every silent performance entity already declares `group_role_type_en` as a
-dramatic classification; production design creates exactly one portrait per used
-role type. Compile the portrait from the complete ordered
-`ensemble_member_types_en` authority: include one recognizable subject per exact
-member type, duplicate only a lone broad type to make a real group, and forbid
-unlisted species, broader relatives, domestic/pet analogues, hybrids, or cute
-fillers. A group portrait may mix species sharing that dramatic role, but must
-contain only its declared silent member types and entities and must exclude every
-dialogue-owning character and every anonymous member of the same species/type, as
-well as every lookalike, duplicate, silhouette, reflection, and cameo. Record the
-complete forbidden dialogue-character name list beside the roster evidence.
+## Silent role groups
 
-For a dialogue-character portrait, compile its exact expression and thought from
-the first writer-authored Dialogue `delivery_en`, together with the Character's
-narrative function and behavior. Keep the mouth naturally closed for the still
-portrait. Do not substitute a neutral face, catalogue smile, random cuteness,
-unrelated emotion, or a later injury state. This presentation expression guides the
-portrait only and does not become immutable identity or Segment-state authority.
+The model authors one `ensemble_roster` plan row for every writer-owned silent
+`group_role_type_en`. Its ordered `allowed_member_types_en` must exactly equal the
+writer authority. The Prompt and catalog row must state the closed roster and exact
+positive subject count. A writer-owned one-shot silent individual may use an exact
+one-subject closed roster; never inflate it to two subjects to satisfy a group
+assumption. Do not introduce a relative, pet analogue, hybrid, filler, speaking
+character, duplicate, reflection, silhouette, or background cameo.
 
-## Location continuity
+An ensemble asset is not automatically a background NPC. It is a reusable visual
+role asset. Production design must read the role's actions, entrances, exits,
+interactions, gaze relationships, state changes, recurrence, and continuity needs
+before choosing how that asset participates in a Location.
 
-Build one topology package per location master following the
-[Location Continuity Package Contract](references/location-continuity-package-contract.md).
-It owns zones, connections, entrances/exits, obstacles, fixed props, immutable
-landmarks, time/weather, palette/materials, and primary light direction. It owns no
-view family and produces no derived image. The catalog Scene-cast location master is
-the only full-frame environment authority and includes all roles used by the bound
-Scene.
+## Props, states, and locations
 
-A location master containing a fixed plot prop or Scene role is not independent.
-Generate canonical prop and role assets first, then supply them as ordered direct
-Seedream references to the Scene-cast location master. Require exact prop geometry
-and exact role identity, natural topology, costume, markings, and complete ensemble
-membership. No secondary environment plate is generated from that master.
+Create an independent prop only when it materially controls recognition, action,
+state, repeat continuity, or fixed-location interaction. Do not create quota props.
+Fixed furniture, installed objects, and stable set dressing belong to the Location;
+do not create separate prop assets merely to keep them from disappearing.
 
-The current deterministic screenplay build/check and fast role-gate PASS are
-required before this department's assets may be handed to cinematography. There is
-no separate screenplay-review response. If later writer collaboration changes
-dialogue ownership, silent group membership, Scene environment scope, or
-story-significant appearance/prop facts, stop using the affected results, rerun the
-role gate, and regenerate affected assets. Never silently bind an image created for
-an older role/Scene scope.
+An appearance-state asset references exactly its owning character and changes only
+the model-authored visible state.
 
-## Current execution
+A dressed Location master is production design's complete environment and stable
+population decision, not a generic background. After understanding the screenplay's
+actions, interactions, routes, blocking needs, recurring geography, and continuity,
+the production-design model authors `fixed_set_elements_en`: the necessary fixed
+furniture, installed props, and stable dressing visibly built into the master.
+Every sentence must already appear in that Location's
+`generation_prompt.continuity.locks_en`; Python checks and copies it but never
+derives a set element from an object word or story example.
+
+Production design then partitions every writer-owned on-screen role asset into two
+ordered, disjoint, model-authored lists:
+
+- `embedded_npc_asset_ids`: incidental, non-speaking scene population whose stable
+  presence is part of the Location. It has no individually controlled entrance,
+  exit, action, interaction, gaze/addressee relationship, state change, or identity
+  continuity that the story must direct.
+- `independent_performer_asset_ids`: every speaking role and every silent role that
+  performs a story action, enters or exits on cue, interacts, changes state, carries
+  a reaction or gaze, or needs independent identity and continuity control.
+
+The Location image visibly contains its fixed set, independent fixed props, and
+`embedded_npc_asset_ids` only. Its generation Prompt references exactly the ordered
+fixed props followed by embedded NPC assets. Independent performers must not appear
+in the Location image; their character or ensemble references are added beside the
+Location at Seedance generation. A change only in independent performers does not
+require a new Location master. A changed embedded population does. An NPC that later
+needs individual performance must be reclassified upstream and the affected
+Location master regenerated.
+
+Python validates coverage, ordering, disjointness, stable Scene presence, and the
+hard ban on embedding dialogue or explicitly state-changing performers. It never
+classifies a role, infers NPC status from keywords, or fills either list.
+
+## Voice references
+
+Each character plan owns an exact voice description, sample text, and provider
+speech rate, plus a complete structured `voice_generation_prompt`. The provider
+receives that object unchanged; Python adds no delivery instruction or identity
+reference prose. Duration follows the exact text and natural delivery; never force
+a fixed duration. Normalize only to 48 kHz stereo 16-bit PCM. Provider word timing
+must cover every sample word without anomalous gaps. Do not share a voice file
+between characters.
+
+## Storage and reuse
+
+Store the single reusable catalog at repository-root `assets/assets.json` and all
+media/evidence under repository-root `assets/`. Task-local asset catalogs or media
+are forbidden. Persist stable unsigned object URLs; never persist TOS query
+signatures.
+
+Exact Prompt equality permits mechanical reuse. When an old/current Prompt differs,
+run `--inspect-semantic-reuse`; Codex itself decides visible equivalence using
+`references/codex-asset-semantic-reuse-review.md`. Code never makes that semantic
+decision. A changed dependency invalidates its consumers.
+
+## Execution
 
 ```text
 python3 screenplay-writer/scripts/validate_role_asset_scope.py \
   --task-dir TASK_DIR
 python3 direct-production-design/scripts/build_initial_production_design.py \
   --task-dir TASK_DIR --inspect-semantic-reuse
-# Codex reads references/codex-asset-semantic-reuse-review.md, directly judges every
-# returned old/current brief pair and, when needed, opens the existing image. It then
-# supplies one explicit decision per candidate:
 python3 direct-production-design/scripts/build_initial_production_design.py \
   --task-dir TASK_DIR --max-workers 4 \
   [--codex-reuse-asset ASSET_ID ...] \
@@ -218,78 +184,9 @@ python3 direct-production-design/scripts/validate_production_design.py \
   --task-dir TASK_DIR
 ```
 
-For real image or character-voice media that contradicts its already-correct
-current brief, force that asset and every dependent asset through generation again.
-For a character ID this also forces a fresh voice reference without conditioning
-on the rejected audio:
-
-```text
-python3 direct-production-design/scripts/build_initial_production_design.py \
-  --task-dir TASK_DIR --max-workers 4 \
-  --regenerate-asset ASSET_ID [--regenerate-asset ASSET_ID ...]
-```
-
-When only a character voice is rejected, preserve the current portrait and use the
-voice-only path. Require provider word subtitles to match the complete sample text
-exactly. Every word interval must fit inside the provider audio's actual dynamic
-duration; the lead-in and trailing silence may each be at most 1.0 second, and no
-internal word gap may exceed 0.6 seconds. Reject and retry an incomplete sample or
-one with anomalous pauses. Never alter playback speed or add silence to manufacture
-a target length:
-
-```text
-python3 direct-production-design/scripts/build_initial_production_design.py \
-  --task-dir TASK_DIR --max-workers 4 \
-  --regenerate-voice CHARACTER_ID [--regenerate-voice CHARACTER_ID ...]
-```
-
-If the required state asset is missing or the semantic brief itself is wrong,
-first rewrite `production-design-plan.json` from the defect evidence, then run the
-builder. For example, a visibly injured Lion requires a Lion-owned injury/appearance
-state asset; the normal identity portrait cannot be renamed or reused as that state.
-Inspect the new real media and rerun production-design validation. Hand control
-back so affected Route B Scripts, compatibility packets/reviews, and execution
-plans are rebuilt. Do not clear or ignore the defect merely because generation
-returned a URL.
+Use `--regenerate-asset` for a rejected image and its dependent images. Use
+`--regenerate-voice` only for a rejected character voice. If the Prompt or semantic
+row is wrong, rewrite `production-design-plan.json` first.
 
 Validators return `PASS` or concrete errors. Correct current files directly. Do not
-create hashes, approval records, review ledgers, migration files, or historical
-archives.
-
-Exact `.brief.txt` equality allows immediate mechanical reuse. A textual difference
-does not mechanically prove staleness: the builder must expose it with
-`--inspect-semantic-reuse` and stop before generation. Codex itself compares the
-old/current visual meaning and inspects the current image when needed. If the same
-pixels satisfy both authorities, pass `--codex-reuse-asset`; if member composition,
-portrait expression, identity, aesthetic, geometry, appearance state, or any other
-visible requirement materially changes, pass `--codex-regenerate-visual-asset`.
-Visual semantic invalidation never regenerates a still-current character voice;
-the broader `--regenerate-asset` remains reserved for a directly rejected real
-asset, including voice rework for a character ID. This judgment must not call
-`SEED_MODEL` or another provider model, and generic code must not contain
-task-specific names, species, props, or story branches. Missing Codex decisions are
-blockers, never permission to overwrite. The single `assets.json`
-may move from its final catalog state back into the current plan state during an
-approved repair.
-
-All asset types follow the same storage rule: one asset folder contains all of that
-asset's images, audio/video when applicable, briefs, prompts, requests and responses.
-`assets.json` is the final reusable asset inventory. Builder lifecycle status is
-transient and must not remain in the final catalog.
-
-Expression, thought, and optional portrait props remain generation and visual-review
-requirements. Body topology is different: it is a required asset-contract field
-because downstream video generation must preserve one exhaustive limb plan across
-motion. Reject a catalog that lacks the current model-authored topology; do not
-manufacture one with keyword logic.
-
-An aesthetic-reference manifest is provenance evidence rather than an approval
-ledger. Its frame hashes protect the selected stills from accidental replacement.
-The builder validates that package for offline analysis integrity, exposes no frame
-paths to generation, and uses only its written aesthetic translation in direct
-asset prompts.
-
-## Boundaries
-
-Do not write dialogue, story events, performance calls, camera/lens/light
-design, Storyboards, Seedance Prompts, video, edits, subtitles, or final sound.
+create compatibility shims, migration contracts, approval ledgers, or history.

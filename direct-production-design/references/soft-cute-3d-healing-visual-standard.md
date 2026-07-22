@@ -31,7 +31,7 @@ final whole-film review.
 ## Originality and prohibited references
 
 - Describe the render family only as `Original Soft & Cute 3D Healing Animation`.
-- Never use a studio, animation brand, renderer, film title, franchise, copyrighted
+- Never use a production-studio name, animation brand, renderer, film title, franchise, copyrighted
   character, living artist, or other IP name as a style shortcut. Prohibited
   examples include `Pixar`, `Disney`, `DreamWorks`, `Blender`, and `Cycles`.
 - Never request imitation, copying, lookalikes, trademark features, or “in the style
@@ -150,9 +150,9 @@ Each Segment must be independently understandable and editable:
 
 - Give it one primary dramatic action. Secondary micro-actions may support that
   action but must not create another competing event.
-- Give it one dominant camera movement, or use a locked camera. Internal Storyboard
-  shots/cuts may clarify the same primary action, but must not accumulate unrelated
-  pushes, pans, tilts, tracks, or orbits.
+- Give it coherent, story-motivated camera behavior. It may be locked, use one
+  movement, or combine several connected movements when the spatial path remains
+  legible.
 - Establish the opening composition and character/prop relationship locally. A
   Storyboard-selected final frame or silent final-two-second input may guide the
   opening visual state, but must never transfer source lip movement, dialogue,
@@ -188,7 +188,7 @@ virtual production must compile them without adding or omitting a beat.
 
 Reject or explicitly exclude, as applicable:
 
-- studio/brand/renderer/film/IP/artist style references or imitation language;
+- production-studio/brand/renderer/film/IP/artist style references or imitation language;
 - cheap generic 3D, plastic-toy texture, oily gloss, excessive reflections,
   inconsistent roughness, harsh bloom, or blown highlights;
 - neutral-model character portraits, blank wildlife stares, empty catalogue smiles,
@@ -214,9 +214,9 @@ Reject or explicitly exclude, as applicable:
 - low resolution, unintended blur, unstable face, unstable palette/light/material,
   watermarks, logos, UI, or unapproved generated text/subtitles.
 
-Production design applies the entire package to visual assets. The
-Storyboard and Segment Script carry the applicable subset plus any Segment-specific
-failure risks; they may not omit a relevant constraint merely to shorten a Prompt.
+The production-design model writes the applicable requirements once inside each
+asset's structured Prompt. Python and downstream departments must not append this
+standard, a second negative block, or emergency corrective prose to that Prompt.
 
 ## Department obligations
 
@@ -225,11 +225,11 @@ failure risks; they may not omit a relevant constraint merely to shorten a Promp
   own all identity and surface locks.
 - **`previsualize-cinematography`:** implement the 45° soft-light grammar, weak
   fill, `f/1.8–2.8` depth strategy, clean warm composition, feasible performance
-  paths/contact, one dominant camera movement, contact readability, and safe edit
+  paths/contact, coherent camera behavior, contact readability, and safe edit
   in the one-Segment Storyboard.
-- **`virtual-production`:** compile the exact approved positive Look locks and
-  applicable canonical negatives into each independent Seedance Segment Script;
-  never introduce a brand/IP shortcut or redesign an upstream authority.
+- **`virtual-production`:** preserve approved asset authority without copying or
+  extending production-design Prompt blocks; never introduce a brand/IP shortcut
+  or redesign an upstream authority.
 - **`finish-postproduction`:** preserve approved warmth, saturation, surface
   response, identity, focus hierarchy, and clean framing through normalization,
   grading, transitions, and subtitle layout; never “repair” the Look by redesign.
@@ -247,7 +247,7 @@ For every affected asset and Segment, verify:
 4. required soft-light direction/fill, shallow-depth intent, and warm low-saturation
    palette;
 5. clean location layout, performance clearance, and readable interactive props;
-6. one primary action, one dominant camera movement, and all five interaction beats
+6. one primary action, coherent motivated camera behavior, and all five interaction beats
    whenever an interaction is authored;
 7. independent opening, completed local action/dialogue/sound, and stable safe cut;
 8. applicable negative constraints and absence of visual artifacts.

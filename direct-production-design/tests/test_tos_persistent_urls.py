@@ -42,6 +42,12 @@ class TosPersistentUrlTests(unittest.TestCase):
                 "https://project-assets.tos-ap-southeast-3.bytepluses.com/"
                 "inputs/audio/voice%20sample.wav",
             )
+            self.assertEqual(
+                tos_storage.production_asset_key(
+                    "character", "actor-a", "identity.png"
+                ),
+                "seed/production-assets/character/actor-a/identity.png",
+            )
 
     def test_uploaded_provider_input_uses_public_url_without_presigning(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

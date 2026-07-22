@@ -63,8 +63,10 @@ lighting, or edit implementation.
 ### 4. Resolve staging, gaze, speech, and completion
 
 For every used character, choose `present_at_open`, `enters`, or `not_visible` and
-author the complete chain required by the contract. The timed first visibility,
-path, landing, and landing result must be observable in the referenced shots.
+author the complete chain required by the contract. First visibility, path,
+landing, and landing result must be observable in the referenced shots. Express
+timing as exact seconds, relative beats, or event order only when it helps the
+scene; no timing notation is mandatory.
 
 Within each shot, keep origins, destinations, crossings, turns, stops, final
 positions, facing, and meaningful gaze mutually consistent. Each Line begins on a
@@ -85,30 +87,28 @@ where each event occurs.
 
 ### 6. Control Scene Units and continuity
 
-A Scene Unit is a 4–15 second generation unit inside a dramatic Scene. Split only
-when performance, dialogue, duration, reference scope, or a genuine event boundary
-requires it; a new scale, speaker, reaction, or sound cue alone does not require a
-split.
+A Scene Unit is a 4–15 second planning unit inside a dramatic Scene. Choose its
+number of story-facing Shots, performers, dialogue lines, reference needs, and
+internal timing by dramatic judgment. It is not a template for the number of
+`Shot N` paragraphs in a future Seedance Prompt. Split or combine units when the
+finished story and provider task duration benefit.
 
 | Constraint | Limit |
 | --- | --- |
 | Scene Unit duration | integer 4–15 seconds |
 | Project runtime | at most 240 seconds |
-| Dialogue Lines | at most three per Scene Unit |
-| Visible dialogue owners | at most two per Scene Unit |
-| O.S./V.O. dialogue owners | at most one per Scene Unit |
-| Silent group-role types | at most two per Scene Unit |
-| Static reference slots | at most six, including one environment |
 
-Minimum time is:
+Protect minimum playable duration with:
 
 ```text
 dialogue_words / 2.6 + dialogue_line_count * 0.25 + 1.0
 ```
 
-Dialogue occupancy is at most 45% for `action_led`, 60% for
-`mixed_dialogue_action`, and 72% for `dialogue_led`. Shot durations sum exactly to
-the Scene Unit duration.
+This is a feasibility floor for delivery, turn-taking, action, and reaction—not a
+Prompt word limit or a required timing notation. Do not apply dialogue occupancy
+percentages, fixed limits on dialogue lines/owners or silent group roles, a fixed
+Shot count, or an exact sum of authored Shot durations. Shot duration cells remain
+editorial estimates rather than downstream Prompt windows.
 
 Use `state_match` for a settled serial handoff, `continuous_motion` for an
 unfinished visible phase that crosses the boundary, and `independent` only for a

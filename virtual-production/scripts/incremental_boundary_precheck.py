@@ -145,7 +145,90 @@ def _published_identity(task_dir: Path, segment_id: str) -> dict[str, Any] | Non
     }
 
 
+def _storyboard_transition_designs(task_dir: Path) -> list[dict[str, Any]] | None:
+    """Read authored Generation Plan seams from the current single-file Storyboard."""
+
+    path = task_dir / "previsualize-cinematography" / "storyboard.md"
+    if not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise IncrementalBoundaryPrecheckError(
+            f"Could not read Storyboard: {path}"
+        ) from exc
+    start = text.find("## Generation Plan")
+    if start < 0:
+        raise IncrementalBoundaryPrecheckError(
+            "Storyboard contains no Generation Plan"
+        )
+    section = text[start + len("## Generation Plan"):]
+    next_heading = re.search(r"^## ", section, re.M)
+    if next_heading:
+        section = section[:next_heading.start()]
+    table_lines = [line.strip() for line in section.splitlines() if line.strip().startswith("|")]
+    if len(table_lines) < 3:
+        raise IncrementalBoundaryPrecheckError(
+            "Storyboard Generation Plan has no Segment rows"
+        )
+
+    def cells(line: str) -> list[str]:
+        return [item.strip() for item in line.strip("|").split("|")]
+
+    headers = cells(table_lines[0])
+    try:
+        segment_index = headers.index("Segment")
+        seam_index = headers.index("Seam")
+    except ValueError as exc:
+        raise IncrementalBoundaryPrecheckError(
+            "Storyboard Generation Plan lacks Segment or Seam"
+        ) from exc
+    rows = [cells(line) for line in table_lines[2:]]
+    if any(len(row) != len(headers) for row in rows):
+        raise IncrementalBoundaryPrecheckError(
+            "Storyboard Generation Plan has an invalid row"
+        )
+
+    def transition_type(seam: str) -> str:
+        value = seam.casefold()
+        for marker, authored_type in (
+            ("dissolve", "dissolve"),
+            ("fade to black", "fade_to_black"),
+            ("fade", "fade"),
+            ("eyeline", "eyeline_cut"),
+            ("reaction", "reaction_cut"),
+            ("match", "match_cut"),
+            ("action", "action_cut"),
+            ("wipe", "effects_wipe"),
+        ):
+            if marker in value:
+                return authored_type
+        return "editorial_cut"
+
+    designs = [
+        {
+            "type": transition_type(row[seam_index]),
+            "reason_en": row[seam_index],
+            "source": "storyboard_generation_plan",
+            "incoming_segment": row[segment_index],
+        }
+        for row in rows[1:]
+    ]
+    designs.append(
+        {
+            "type": "final_end",
+            "reason_en": "End of the final Generation Segment.",
+            "source": "storyboard_generation_plan",
+            "incoming_segment": "none",
+        }
+    )
+    return designs
+
+
 def _story_transition_designs(task_dir: Path) -> list[dict[str, Any]]:
+    storyboard_designs = _storyboard_transition_designs(task_dir)
+    if storyboard_designs is not None:
+        return storyboard_designs
     path = task_dir / "screenplay-writer" / "screenplay.md"
     try:
         lines = path.read_text(encoding="utf-8").splitlines()

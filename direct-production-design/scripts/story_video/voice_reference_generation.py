@@ -140,6 +140,7 @@ def _brief(character: dict[str, Any]) -> dict[str, Any]:
         "voice_description_en": character["voice_description_en"],
         "sample_text_en": character["voice_sample_text_en"],
         "speech_rate": character["voice_speech_rate"],
+        "generation_prompt": character["voice_generation_prompt"],
         "output": {
             "sample_rate_hz": VOICE_SAMPLE_RATE_HZ,
             "channels": VOICE_CHANNELS,
@@ -326,25 +327,11 @@ def _normalize_to_contract(source: Path, target: Path) -> float:
         temporary.unlink(missing_ok=True)
 
 
-def _provider_prompt(character: dict[str, Any], *, has_identity_reference: bool) -> str:
-    reference_instruction = (
-        "@Audio1 supplies only speaker identity, age, timbre, accent, and vocal texture; "
-        "do not copy its wording, silence, tempo, or long pauses. "
-        if has_identity_reference
-        else "Create one original speaker identity from the voice direction. "
-    )
-    return (
-        reference_instruction
-        + "Speak exactly the sample text once at the natural pace implied by the wording "
-        "and voice direction. The text determines the total duration; do not target, "
-        "pad, stretch, compress, or trim to any fixed duration. Use connected phrasing "
-        "with no pause longer than 0.35 seconds and only a very short clean lead-in and "
-        "tail. "
-        "Do not add, omit, repeat, paraphrase, whisper, sing, announce stage directions, "
-        "or name the speaker. VOICE DIRECTION: "
-        + character["voice_description_en"]
-        + " EXACT SAMPLE TEXT: "
-        + character["voice_sample_text_en"]
+def _provider_prompt(character: dict[str, Any]) -> str:
+    """Serialize the exact model-authored voice Prompt without added prose."""
+
+    return json.dumps(
+        character["voice_generation_prompt"], ensure_ascii=False, indent=2
     )
 
 
@@ -385,20 +372,13 @@ def _generate_one(
             },
         }
 
-    identity_reference = target if target.is_file() and not force_regenerate else None
-    provider_prompt = _provider_prompt(
-        character, has_identity_reference=identity_reference is not None
-    )
+    provider_prompt = _provider_prompt(character)
     request_record = {
         "contract": VOICE_REQUEST_CONTRACT,
         "entity_id": entity_id,
         "provider": "seed-audio-1.0",
         "prompt": provider_prompt,
-        "identity_reference": (
-            target.relative_to(repository_root).as_posix()
-            if identity_reference is not None
-            else "none"
-        ),
+        "identity_reference": "none",
         "audio_config": {
             "format": "wav",
             "sample_rate": VOICE_SAMPLE_RATE_HZ,
@@ -430,7 +410,7 @@ def _generate_one(
         for attempt in range(1, VOICE_MAX_GENERATION_ATTEMPTS + 1):
             args = argparse.Namespace(
                 prompt=provider_prompt,
-                audio_ref=[str(identity_reference)] if identity_reference else [],
+                audio_ref=[],
                 image_ref=None,
                 output_format="wav",
                 sample_rate=VOICE_SAMPLE_RATE_HZ,

@@ -11,7 +11,7 @@ media, dialogue-duration ledger, and boundary-continuity report live below
 
 `virtual-production/generation-state.json` must report `GENERATED`, cover every
 compile-manifest Segment, and bind each output to its exact Seed Master Script,
-execution plan, provider attempt, final-Prompt/`assets.json` semantic compatibility PASS, and
+execution plan, provider attempt, current resolved media bindings, and
 production record. Postproduction executes
 the authored edit and may normalize technical delivery, but cannot recompose a
 Shot, rewrite dialogue, or synthesize silence for missing native audio.

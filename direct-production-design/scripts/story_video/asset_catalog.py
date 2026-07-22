@@ -65,7 +65,9 @@ COSTUME_ASSET_KEYS = COMMON_ASSET_KEYS | {
 }
 LOCATION_MASTER_ASSET_KEYS = COMMON_ASSET_KEYS | {
     "included_prop_ids",
-    "included_role_asset_ids",
+    "embedded_npc_asset_ids",
+    "independent_performer_asset_ids",
+    "fixed_set_elements_en",
 }
 SOUND_ASSET_KEYS = frozenset(
     {
@@ -327,11 +329,11 @@ def _validate_roster_members(
         if (
             isinstance(subject_count, bool)
             or not isinstance(subject_count, int)
-            or subject_count < 2
+            or subject_count < 1
         ):
             raise StoryVideoError(
                 f"ensemble_roster {asset_id} member {member_type_id} roster_asset must "
-                "declare subject_count>=2; silent role types require a real group portrait."
+                "declare a positive subject_count; one-shot silent roles may use an exact one-subject closed roster."
             )
         visual, resolved = _validate_visual(
             {"path": roster_asset["path"], "uri": roster_asset["uri"]},
@@ -753,21 +755,50 @@ def load_asset_catalog(
                 raise StoryVideoError(
                     f"location_master {asset_id} included_prop_ids must be a unique string array."
                 )
-            included_role_asset_ids = value["included_role_asset_ids"]
+            role_partitions: dict[str, list[str]] = {}
+            for field in (
+                "embedded_npc_asset_ids",
+                "independent_performer_asset_ids",
+            ):
+                role_asset_ids = value[field]
+                if (
+                    not isinstance(role_asset_ids, list)
+                    or any(not isinstance(item, str) for item in role_asset_ids)
+                    or len(role_asset_ids) != len(set(role_asset_ids))
+                ):
+                    raise StoryVideoError(
+                        f"location_master {asset_id} {field} must be a unique string array."
+                    )
+                role_partitions[field] = list(role_asset_ids)
+            role_overlap = set(role_partitions["embedded_npc_asset_ids"]).intersection(
+                role_partitions["independent_performer_asset_ids"]
+            )
+            if role_overlap:
+                raise StoryVideoError(
+                    f"location_master {asset_id} role partitions overlap: "
+                    f"{sorted(role_overlap)}."
+                )
+            fixed_set_elements_en = value["fixed_set_elements_en"]
             if (
-                not isinstance(included_role_asset_ids, list)
-                or not included_role_asset_ids
-                or any(not isinstance(item, str) for item in included_role_asset_ids)
-                or len(included_role_asset_ids) != len(set(included_role_asset_ids))
+                not isinstance(fixed_set_elements_en, list)
+                or any(
+                    not isinstance(item, str) or not item.strip()
+                    for item in fixed_set_elements_en
+                )
+                or len(fixed_set_elements_en)
+                != len({item.strip() for item in fixed_set_elements_en})
             ):
                 raise StoryVideoError(
-                    f"location_master {asset_id} included_role_asset_ids must be a "
-                    "non-empty unique string array."
+                    f"location_master {asset_id} fixed_set_elements_en must be a "
+                    "unique text array."
                 )
             normalized.update(
                 {
                     "included_prop_ids": list(included_prop_ids),
-                    "included_role_asset_ids": list(included_role_asset_ids),
+                    **role_partitions,
+                    "fixed_set_elements_en": [
+                        item.strip() for item in fixed_set_elements_en
+                    ],
                 }
             )
         if asset_type == "character":
@@ -817,16 +848,20 @@ def load_asset_catalog(
                     raise StoryVideoError(
                         f"location_master {asset_id} included_prop_ids contains non-prop {prop_id!r}."
                     )
-            for role_asset_id in asset["included_role_asset_ids"]:
-                role_asset = assets.get(role_asset_id)
-                if not role_asset or role_asset.get("type") not in {
-                    "character",
-                    "ensemble_roster",
-                }:
-                    raise StoryVideoError(
-                        f"location_master {asset_id} included_role_asset_ids contains "
-                        f"non-role asset {role_asset_id!r}."
-                    )
+            for field in (
+                "embedded_npc_asset_ids",
+                "independent_performer_asset_ids",
+            ):
+                for role_asset_id in asset[field]:
+                    role_asset = assets.get(role_asset_id)
+                    if not role_asset or role_asset.get("type") not in {
+                        "character",
+                        "ensemble_roster",
+                    }:
+                        raise StoryVideoError(
+                            f"location_master {asset_id} {field} contains non-role "
+                            f"asset {role_asset_id!r}."
+                        )
         elif asset_type == "sound" and asset["owner_character_id"] != "none":
             owner = assets.get(asset["owner_character_id"])
             if not owner or owner.get("type") != "character":

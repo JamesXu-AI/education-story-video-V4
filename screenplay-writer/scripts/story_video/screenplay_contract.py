@@ -40,14 +40,14 @@ AUDIO_RE = re.compile(
     r"^(BGM (?:ENTERS|EVOLVES|STOPS|STING)|SFX|AMBIENCE|SILENCE):\s*(.+)$"
 )
 
+DRAMATIC_WORKLOADS = {
+    "action_led",
+    "mixed_dialogue_action",
+    "dialogue_led",
+}
 DIALOGUE_WORDS_PER_SECOND = 2.6
 DIALOGUE_TURN_ALLOWANCE_SECONDS = 0.25
 MINIMUM_ACTION_REACTION_SECONDS = 1.0
-DIALOGUE_OCCUPANCY_LIMITS = {
-    "action_led": 0.45,
-    "mixed_dialogue_action": 0.60,
-    "dialogue_led": 0.72,
-}
 
 PRODUCTION_INFORMATION_FIELDS = (
     "Production Type",
@@ -247,34 +247,6 @@ def fixed_screenplay_prompt() -> tuple[Path, str]:
     return path, prompt
 
 
-def validate_dialogue_occupancy(
-    *,
-    segment_id: str,
-    dramatic_workload: str,
-    duration_seconds: float,
-    block_windows: list[dict[str, Any]],
-) -> tuple[float, float]:
-    """Validate timing evidence without creating or filling an audio artifact."""
-
-    if dramatic_workload not in DIALOGUE_OCCUPANCY_LIMITS:
-        raise StoryVideoError(f"{segment_id} has an invalid dramatic workload")
-    if duration_seconds <= 0:
-        raise StoryVideoError(f"{segment_id} duration must be positive")
-    dialogue_seconds = sum(
-        float(item["end_seconds"]) - float(item["start_seconds"])
-        for item in block_windows
-        if item.get("block_type") == "dialogue"
-    )
-    occupancy = dialogue_seconds / duration_seconds
-    limit = DIALOGUE_OCCUPANCY_LIMITS[dramatic_workload]
-    if occupancy > limit + 1e-9:
-        raise StoryVideoError(
-            f"{segment_id} dialogue occupancy {occupancy:.1%} exceeds the "
-            f"{limit:.0%} {dramatic_workload} limit"
-        )
-    return occupancy, limit
-
-
 def _next_nonempty(lines: list[str], index: int) -> int:
     while index < len(lines) and not lines[index].strip():
         index += 1
@@ -417,15 +389,6 @@ def _positive_number(value: str, *, label: str) -> float:
     if result <= 0:
         raise StoryVideoError(f"{label} must be positive")
     return result
-
-
-def _timed_moment(value: str, *, label: str) -> tuple[float, str]:
-    match = re.fullmatch(r"t=([0-9]+(?:\.[0-9])?)s:\s*(.+)", value)
-    if not match or not _concrete(match.group(2)):
-        raise StoryVideoError(
-            f"{label} must use 't=<seconds>s: <observable event>'"
-        )
-    return float(match.group(1)), match.group(2)
 
 
 def _split_br(value: str) -> list[str]:
@@ -946,14 +909,6 @@ def _validate_performance(screenplay: dict[str, Any]) -> None:
         segment_id = segment["story_plan"]["segment_id"]
         shots = segment["shots"]
         shot_map = {shot["shot_id"]: shot for shot in shots}
-        shot_time_bounds: dict[str, tuple[float, float]] = {}
-        shot_cursor = 0.0
-        for shot in shots:
-            shot_time_bounds[shot["shot_id"]] = (
-                shot_cursor,
-                shot_cursor + shot["duration_seconds"],
-            )
-            shot_cursor += shot["duration_seconds"]
         calls = segment["performance_calls"]
         call_map = {call["entity_id"]: call for call in calls}
         if len(call_map) != len(calls) or any(entity_id not in entities for entity_id in call_map):
@@ -1045,35 +1000,13 @@ def _validate_performance(screenplay: dict[str, Any]) -> None:
                     raise StoryVideoError(
                         f"{entity_id} First Visible Shot must not follow Landing Shot"
                     )
-                first_time, _ = _timed_moment(
-                    call["first_visible_moment_en"],
-                    label=f"{entity_id} First Visible Moment",
-                )
-                landing_time, _ = _timed_moment(
-                    call["landing_result_en"],
-                    label=f"{entity_id} Landing Moment / Result",
-                )
-                if appearance == "present_at_open" and first_time != 0.0:
+                if not _concrete(call["first_visible_moment_en"]):
                     raise StoryVideoError(
-                        f"{entity_id} present_at_open must be first visible at t=0.0s"
+                        f"{entity_id} First Visible Moment must describe an observable event"
                     )
-                if appearance == "enters" and first_time <= 0.0:
+                if not _concrete(call["landing_result_en"]):
                     raise StoryVideoError(
-                        f"{entity_id} entrance First Visible Moment must follow t=0.0s"
-                    )
-                if landing_time < first_time:
-                    raise StoryVideoError(
-                        f"{entity_id} Landing Moment must not precede First Visible Moment"
-                    )
-                first_bounds = shot_time_bounds[first_id]
-                landing_bounds = shot_time_bounds[landing_id]
-                if not first_bounds[0] <= first_time <= first_bounds[1]:
-                    raise StoryVideoError(
-                        f"{entity_id} First Visible Moment falls outside its referenced Shot"
-                    )
-                if not landing_bounds[0] <= landing_time <= landing_bounds[1]:
-                    raise StoryVideoError(
-                        f"{entity_id} Landing Moment falls outside its referenced Shot"
+                        f"{entity_id} Landing Moment / Result must describe an observable event"
                     )
                 if shot_map[landing_id]["completion_mode"] != "completed":
                     raise StoryVideoError(
@@ -1142,21 +1075,6 @@ def _validate_performance(screenplay: dict[str, Any]) -> None:
                 raise StoryVideoError(f"{dialogue['line_id']} has an undeclared dialogue Addressee")
             if target == speaker_id:
                 raise StoryVideoError(f"{dialogue['line_id']} must use self for self-address")
-
-        dialogue_calls = [call for call in calls if call["speaks"]]
-        visible_dialogue = [call for call in dialogue_calls if call["presence_mode"] == "on_screen"]
-        nonvisible_dialogue = [call for call in dialogue_calls if call["presence_mode"] != "on_screen"]
-        group_roles = {
-            entities[call["entity_id"]]["group_role_type_en"]
-            for call in calls
-            if entities[call["entity_id"]]["entity_kind"] == "anonymous_ensemble"
-        }
-        if len(dialogue_calls) > 3 or len(visible_dialogue) > 2 or len(nonvisible_dialogue) > 1:
-            raise StoryVideoError(f"{segment_id} exceeds dialogue-character scope")
-        if len(group_roles) > 2 or 1 + len(dialogue_calls) + len(group_roles) > 6:
-            raise StoryVideoError(f"{segment_id} exceeds static-reference scope")
-        if len(expected_line_owner) > 3:
-            raise StoryVideoError(f"{segment_id} exceeds three Dialogue Lines")
 
     if used_entities != set(entities):
         raise StoryVideoError("Characters table contains unused entities")
@@ -1317,15 +1235,12 @@ def validate_screenplay(screenplay: dict[str, Any]) -> None:
             environment["int_ext"] != "MIXED" and environment["int_ext"] != slug_kind
         ):
             raise StoryVideoError(f"{expected} Slugline conflicts with its Environment")
-        if plan["dramatic_workload"] not in DIALOGUE_OCCUPANCY_LIMITS:
+        if plan["dramatic_workload"] not in DRAMATIC_WORKLOADS:
             raise StoryVideoError(f"{expected} has an invalid Workload")
         duration = plan["estimated_duration_seconds"]
         if isinstance(duration, bool) or not 4 <= duration <= 15:
             raise StoryVideoError(f"{expected} Duration Seconds must be 4-15")
         runtime += duration
-        shot_duration = sum(shot["duration_seconds"] for shot in segment["shots"])
-        if abs(shot_duration - duration) > 1e-6:
-            raise StoryVideoError(f"{expected} Shot durations must equal Scene Unit duration")
         if not any(shot["audio_cues"] for shot in segment["shots"]):
             raise StoryVideoError(f"{expected} requires at least one authored audio event")
         for shot in segment["shots"]:
@@ -1347,14 +1262,16 @@ def validate_screenplay(screenplay: dict[str, Any]) -> None:
         dialogue_words = sum(
             len(WORD_RE.findall(item["spoken_text_en"])) for item in spoken_entries
         )
-        dialogue_seconds = (
+        minimum_playable_seconds = (
             dialogue_words / DIALOGUE_WORDS_PER_SECOND
             + len(spoken_entries) * DIALOGUE_TURN_ALLOWANCE_SECONDS
+            + MINIMUM_ACTION_REACTION_SECONDS
         )
-        if dialogue_seconds / duration > DIALOGUE_OCCUPANCY_LIMITS[plan["dramatic_workload"]] + 1e-6:
-            raise StoryVideoError(f"{expected} dialogue occupancy exceeds its Workload limit")
-        if duration + 1e-6 < dialogue_seconds + MINIMUM_ACTION_REACTION_SECONDS:
-            raise StoryVideoError(f"{expected} duration is below its dialogue/action floor")
+        if duration + 1e-6 < minimum_playable_seconds:
+            raise StoryVideoError(
+                f"{expected} duration is below its 2.6 words-per-second "
+                "dialogue/action floor"
+            )
         call_map = {
             call["entity_id"]: call for call in segment["performance_calls"]
         }

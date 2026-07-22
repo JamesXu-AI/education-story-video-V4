@@ -1,217 +1,190 @@
 ---
 name: virtual-production
-description: Invoke seedance-master-skill Route B on the native upstream storyboard.md and storyboard-compile-manifest.json, persist its ordered segment-NNN.md Seedance Scripts unchanged, compare every final Prompt and provider binding with assets.json semantic authority, resolve literal provider tokens, route incompatible assets back to production design, and execute the Seed Master shooting plan with internally maintained Seedance parameters. Use for virtual production, Seedance Script compilation, asset-semantic compatibility, asset-link resolution, dependency-wave generation, or resuming generated Segment clips. Never read or recreate storyboard.data.json.
+description: "Use Seedance Master Route B to compile the approved single-file storyboard.md into free-form Seedance prompts, resolve provider media from a separate private plan, and execute dependency-aware video generation. Use for Seedance prompt writing, prompt repair, materialization, or Segment generation. Python validates only non-empty text plus provider-token placement, exact population lock, and exact dialogue ownership; it does not impose a creative prose template."
 ---
 
-# Virtual Production · 虚拟制片
+# Virtual Production
 
-## Authority boundary
+## Inputs and outputs
 
-Invoke the external `seedance-master-skill` only for Route B Script authorship and
-observed successor recompilation. This is the second authorized Seed Master entry
-point in the project; `previsualize-cinematography` remains the Route A entry point.
-Do not invoke any other external production Skill.
-
-Consume these upstream authorities directly:
-
-- `TASK_DIR/previsualize-cinematography/storyboard.md`;
-- `TASK_DIR/previsualize-cinematography/storyboard-compile-manifest.json`;
-- repository-root `assets/assets.json`;
-- the current screenplay and production-design bibles named by the Storyboard.
-
-`storyboard.data.json` does not exist. Never request, infer, regenerate, convert,
-cache, or accept it. Never author a local Storyboard schema or local Prompt compiler.
-
-## Seed Master Route B
-
-Pass Seed Master the original request, exact Storyboard, compile manifest, current
-asset catalog semantics (including every visible character's model-authored
-`body_topology`), and current provider capability profile. Require its fixed
-Route B outputs:
-
-- ordered `.pending/virtual-production/seedance-segment-scripts/segment-NNN.md`;
-- `.pending/virtual-production/storyboard-to-prompt-trace.json`;
-- `.pending/virtual-production/dialogue-duration-ledger.json`;
-- `.pending/virtual-production/boundary-continuity-report.json`.
-
-Persist every `segment-NNN.md` exactly as returned. Each file is one Seedance task
-and may contain multiple ordered internal Shots. Preserve literal
-`@ImageN/@VideoN/@AudioN`; never place actual URLs inside the provider Prompt.
-Require Seed Master to run its own `validate_segment_prompt.py` and
-`validate_storyboard_prompt_translation.py` gates before handing Route B back.
-
-Every returned Prompt must contain one scene-specific
-`### 1.5 [CINEMATIC DIRECTION]` section and exactly one
-full internal `cinematic_shot_contract` for each ordered Shot. The selected direction names all
-owned Shot IDs and applies only relevant anti-stage rules; it may not be a pasted
-generic paragraph. Each Shot contract must copy the complete approved Storyboard
-record and its concise exact provider-core `staging_implementation` must occur once in Direction. Missing,
-misordered, or unbound cinematic contracts block materialization. Virtual
-production never repairs a theatrical Scene or Shot locally: missing action returns
-to Screenplay, false spatial focus/camera motive returns to Route A, and only clear
-provider wording returns to Route B.
-
-The persisted Seed Master Script retains source-coverage, Line, and cinematic Shot
-contract rows for audit. After every validator and runtime binding check passes,
-materialization strips those redundant metadata sections from the actual provider
-text; their exact implementations remain in Generation setup or Shot Direction.
-This prevents the real Seedance Prompt from becoming a duplicated schema wall while
-preserving proof that no approved fact was omitted.
-
-For every active `reference_image` bound to a character or a character-owned
-costume/appearance state, require the final provider Prompt to contain exactly one
-canonical line using the current catalog values:
+Read the sole Route A authority:
 
 ```text
-- body_topology_contract: {"asset_id":"<bound asset>","body_topology":<exact model-authored object>,"character_id":"<owner>"}
+TASK_DIR/previsualize-cinematography/storyboard.md
 ```
 
-Serialize JSON with sorted keys and no insignificant spaces. This is generated from
-the task's semantic plan, never from a character/species keyword table. The
-contract's limb sets are exhaustive; non-limb appendages must not be reinterpreted
-as limbs, and a natural-animal limb pair may not be retained in addition. Generic
-phrases such as `preserve anatomy` or `reject anatomy errors` do not replace this
-positive topology contract.
+Invoke `seedance-master-skill` Route B with the original request, that Storyboard,
+current `assets/assets.json`, and provider capabilities.
 
-For repository handoff, keep the two Route B ledgers at schema version `1.0`, bind
-them to the exact Storyboard and manifest hashes, keep Segment order identical to
-the compile manifest, and include:
-
-- dialogue ledger: `segment_id`, `duration_seconds`, and ordered `dialogue_cues`
-  with `line_id`, `shot_id`, speaker identity, exact text, start, and end;
-- boundary report: `segment_id`, `editable_hold_seconds`, `final_visible_state`,
-  and `final_sound_state`.
-
-## Asset and value materialization
-
-Require every static manifest element namespace (the text before its first `.`) to
-be an exact `assets.json` asset ID. For an ensemble roster member use
-`roster-id--member-type-id`. Reserve the namespace `continuity` for provider output
-from the one predecessor named by the shooting plan.
-
-Refresh the capability profile, then follow
-[Final Prompt / assets.json compatibility](references/prompt-assets-json-compatibility-contract.md):
+For each Generation Segment, Route B writes:
 
 ```text
-python3 virtual-production/scripts/refresh_seedance_capability_profile.py \
-  --task-dir TASK_DIR
-python3 virtual-production/scripts/prepare_asset_compatibility_reviews.py \
-  --task-dir TASK_DIR [--segments segment-NNN ...]
+TASK_DIR/.pending/virtual-production/seedance-segment-scripts/segment-NNN.md
+TASK_DIR/.pending/virtual-production/seedance-segment-plans/segment-NNN.json
 ```
 
-Read every selected semantic row directly from `assets.json`. Compare its asset ID,
-type, description, character ownership, appearance/injury state, authority, group,
-prop, body topology, performance, voice and sound declarations with the complete final Prompt and
-its owned Storyboard requirements. Author one current
-`prompt-assets-json-compatibility-review-v2` per Segment in the generated review
-file. Do not download media or compare provider/local file bytes in this gate. Then
-run:
+The Markdown file is the exact provider Prompt. The JSON file is private transport
+metadata for validation, asset resolution, scheduling, and API parameters. Never
+copy private-plan fields into the Prompt.
 
-```text
-python3 virtual-production/scripts/validate_asset_compatibility_reviews.py \
-  --task-dir TASK_DIR [--segments segment-NNN ...]
-```
+## Provider Prompt contract
 
-Treat identity, declared story state, injury/body state, wardrobe/costume, prop
-state, occupancy, group membership/count, location, time/weather, light/color,
-voice, sound role, and action phase as compatibility domains. A normal healthy
-asset is incompatible when the Prompt requires that character injured or in
-another appearance state. Do not attempt to repair a conflicting input with
-Prompt wording, a second reference, or negative instructions.
+Read [natural-language-seedance-prompt.md](references/natural-language-seedance-prompt.md).
+This repository-local contract overrides generic Route B guidance that prescribes
+fixed Prompt headings/order, consecutive `Shot N` prose, one movement per Shot, a
+word limit, wording bans, or forbidden timing formats.
+Route B authors the Prompt by cinematic and model-facing judgment. There is no
+required heading, section order, paragraph count, total Shot count, consecutive
+Shot numbering, camera movement count, word count, vocabulary list, sentence
+pattern, or timing notation. A private dialogue cue is the sole Shot-label
+exception: its exact line and readable speaker must occur inside the matching
+`Shot N:` section.
+The author may use prose, bullets, numbered Shots, continuous action, cuts,
+compound camera behavior, time ranges, or another form when it best communicates
+the intended result. The Storyboard is creative authority, not a template for
+Prompt paragraph count.
 
-On incompatibility, write `overall_verdict: FAIL`, name the exact conflicting
-binding, required versus `assets.json` facts, conflict domains, affected asset IDs, and
-repair actions. The validator emits
-`.pending/virtual-production/asset-rework-requests/segment-NNN.json`; stop before
-execution-plan publication, upload, preflight, or Seedance submission. Route that
-request to `direct-production-design`, then rerun every affected downstream gate.
+Prompt authorship still aims to communicate the intended subjects, action,
+performance, space, references, continuity, dialogue/audio, visual finish, and
+landing. Most are semantic directing goals evaluated by Seedance Master and human
+review. Python searches only the three auditable bindings defined below: provider
+tokens, the exact population lock, and exact dialogue ownership.
 
-After every selected Segment has a current compatibility PASS, resolve values:
+For every Segment set in a Location, including `video_extension`, bind its approved dressed master together with the required
+independent performer identity/state references. The Location image owns
+architecture, materials, topology, every production-design-authored fixed-set
+element, and its embedded NPC population. Express those responsibilities in the
+Prompt only when and where Seedance Master judges useful; no sentence, placement,
+or repetition rule applies. Do not bind an embedded NPC
+again as a separate character, and never let a speaking or story-active performer
+inherit identity from the Location image. Never rely on Seedance to invent fixed set
+elements or embedded population, and never treat a close-up
+crop as their removal from the set.
 
-```text
-python3 virtual-production/scripts/materialize_seed_master_scripts.py \
-  --task-dir TASK_DIR [--segments segment-NNN ...]
-python3 virtual-production/scripts/validate_segment_scripts.py \
-  --task-dir TASK_DIR [--segments segment-NNN ...]
-```
+Also bind temporal evidence when the Segment continues or revisits state. Keep the
+authorities separate: predecessor video/last frame owns only the recent action,
+pose, gaze, mutable-prop, and camera phase it can prove; the Location master owns
+the full set and embedded population, including what the predecessor crop does not
+show. Preserve the approved embedded population and independent-performer
+authority by including the private plan's exact `population_lock_en` sentence once
+in the Prompt.
 
-Materialization queries the current asset catalog for real HTTP(S) image/audio
-links and writes one internal
-`.pending/virtual-production/seedance-execution-plans/segment-NNN.json`. It also
-locks `model`, duration, resolution, ratio, native-audio flags, watermark,
-last-frame return, task expiry, priority, operation, dependency wave, and the exact
-token-to-value replacement. The execution plan is transport authority only; it may
-not change a Prompt, dialogue, Shot, reference responsibility, or shooting-plan
-decision.
-Every plan must carry a current `prompt-assets-json-compatibility-receipt-v2` PASS
-binding the final Prompt, provider-token responsibilities, and current
-`assets.json` semantic rows. Any Prompt, binding namespace, catalog semantic row,
-URI value, or predecessor-attempt change invalidates the packet, review, and plan.
-SHA values detect stale artifacts only; they never decide semantic compatibility.
+Temporal evidence is the sole visual identity authority for performers and movable
+props already present in that evidence. Do not rebind those same subjects as
+standalone images in a continuation or nonadjacent revisit; Seedance may interpret
+overlapping authorities as additional instances. Bind only a genuinely new entrant
+or an explicit post-action appearance target separately. A closed roster that is
+authorized by continuity but is not visibly carried by the selected temporal
+evidence counts as a returning entrant, not as an already-carried subject: bind its
+roster reference when it must re-enter, identify every unique member in natural
+language, and state that each member may first appear once and may not be generated
+again after that reveal. Apply the same rule to an offscreen court or crowd that
+must become visible only to exit. Keep the same-subject intent unambiguous without
+requiring any particular Prompt phrase.
+Provider reference media is request-wide and cannot be deactivated by a later Shot.
+When one closed roster must exit and another must enter with mutually exclusive
+visual authority, place the completed exit at a Generation Segment boundary. The
+first Segment binds only the exiting roster; the dependent successor omits that
+reference and binds only the entering roster. Never claim that Shot wording can
+turn off a reference that was submitted with the same provider request.
 
-## Shooting-plan execution
+## Private execution plan
 
-Read
-[incremental-boundary-precheck.md](references/incremental-boundary-precheck.md).
+The private JSON plan may contain only deterministic execution authority:
 
-Generate only Scripts whose Seed Master shooting-plan gate is ready:
+- source Storyboard hash and Segment identity;
+- duration, operation, dependency, seam, and predecessor evidence;
+- location state chain and relationship, exact temporal/world binding roles,
+  embedded NPC roster, Segment-authorized independent performers, and one readable
+  population-lock sentence;
+- provider-token to asset-namespace mapping;
+- exact dialogue ownership needed for validation;
+- final visible/sound state and editable hold;
+- fixed provider parameters.
 
-```text
-python3 virtual-production/scripts/preflight_segment.py \
-  --task-dir TASK_DIR \
-  --segment-script TASK_DIR/.pending/virtual-production/seedance-segment-scripts/segment-NNN.md
-python3 virtual-production/scripts/generate_segment_videos.py \
-  --task-dir TASK_DIR --segments segment-NNN ...
-```
+Seedance Master authors this plan from `storyboard.md`. Python may parse, validate,
+hash, resolve catalog URLs, and reject disagreement. Python may not invent, copy
+into place, summarize, rewrite, or fill missing Prompt prose, Shots, dialogue,
+references, continuity, or creative fields. The private plan may retain storyboard
+Shot traceability for scheduling and media scope, but its `shot_count` does not
+prescribe the Prompt's total Shot count. Python validates only that every declared
+provider token appears and is introduced before the first Shot section, the exact
+population lock appears once, and each dialogue cue's quoted text plus speaker is
+inside its matching `Shot N:` section. It does not validate other headings,
+paragraphs, Shot numbering/count, movement descriptions, words, or time expressions.
 
-- `parallel`: compile/materialize all ready wave members and generate them with
-  bounded concurrency, but only when adjacent manifest `scene_ids` do not overlap.
-- `serial_after_predecessor_review`: wait for the exact predecessor provider
-  attempt, call repository-local `seedance-video-review`, and proceed only after it
-  returns `NO_ISSUES`. Invoke Seed Master again with that observed attempt; require
-  `shooting_plan_status: observed_adapted`; then materialize and generate.
-- `video_extension`: bind the complete predecessor video with audio preserved.
-- soft first-frame reference: for a settled motivated same-Scene cut, use
-  `multimodal_reference` and bind only the provider-returned last frame as an
-  ordinary `reference_image`; do not set `strict_first_frame` and do not promise
-  identical opening pixels.
-- predecessor-video reference: for unfinished same-Scene action, performance,
-  blocking/facing/eyeline, entrance/contact, or camera motion, bind the complete
-  predecessor video with audio preserved through `video_extension`.
-- matched cut: only across an authored Scene/time/state discontinuity, bind exactly
-  the predecessor's final 2.0 seconds with all audio removed plus its
-  provider-returned last frame; it is not a third same-Scene mode.
+## Materialization and generation
 
-Before materialization or provider submission, runtime compares every adjacent
-manifest pair. Overlapping `scene_ids` must directly depend on the predecessor and
-match exactly one of the two same-Scene contracts above. Parallel, matched-tail, or
-strict-first-frame substitutions are hard failures.
+Run capability validation, materialization, preflight, and generation only after
+the Prompt passes those three binding checks and the private plan passes its
+transport checks.
+Materialization may resolve the
+manually authored token mapping to current catalog URLs, but it must reject missing
+or mistyped assets directly. It must not create compatibility packets, review
+drafts, rework JSON, or Prompt text. Machine-readable catalog facts remain
+transport authority and do not define a required provider-prose structure.
 
-Runtime media must match the exact predecessor attempt frozen in the execution
-plan. No dependent Prompt, preflight, media upload, or Seedance call may precede
-review and Seed Master recompilation. After all waves exist, run generation once
-without `--segments` so the complete state is consolidated as `GENERATED`.
+Use the Storyboard's two same-Scene temporal modes unchanged: soft predecessor-last-frame
+reference image after a settled motivated cut, or complete predecessor-video
+extension for unfinished action, performance, blocking, gaze, entrance, or camera
+phase. Neither mode replaces the Location master. Dependent work waits for the
+exact predecessor review.
 
-Every output must contain readable video, Seedance-native synchronized audio, and
-the requested provider last frame. Technical retries may repeat only the identical
-request and remain capped at three.
+That review evaluates semantic completion, not frame-exact obedience to every
+planned internal-cut second or centimetre-level movable-prop mark. A Segment may be
+accepted when Shot order, causality, exact speaker/dialogue, required actions,
+identity, fixed set, population, and usable ending are intact even if an internal
+cut lands earlier/later or a movable prop settles at an adjacent, stable, reachable
+position. Do not regenerate only to force an otherwise valid take onto the planned
+timestamp or prop coordinate. Timing remains hard when it controls a causal gate,
+dialogue/action completion, authored transition or sound synchronization. Placement
+remains hard when it changes ownership or story function, loses/duplicates the prop,
+breaks a fixed anchor, creates impossible geography, or prevents the next action.
 
-Immediately after each provider result is published, prepare the current incoming
-boundary when its editorial predecessor exists. Also prepare a previously generated
-successor boundary when the predecessor finishes later. Print
-`BOUNDARY_REVIEW_READY` with the strict audiovisual preview, all-frame evidence, and
-technical routing record. Small high-confidence color/exposure jumps route to
-`finish-postproduction`; a jump above safe correction limits stops later waves for
-direct picture-and-sound review. Metrics never decide identity, action, performance,
-dialogue, or semantic continuity and never create an approval record.
+After an accepted variation, the observed predecessor tail becomes temporal
+authority. Recompile or explicitly revalidate the successor Prompt so its incoming
+action and mutable-prop description use the actual final state; never preserve a
+planned landing in prose when the accepted video visibly landed elsewhere.
 
-The active task calls repository-local `seedance-video-review` as soon as the
-evidence is ready. If it reports a generation-owned defect, regenerate only the
-current Segment before allowing dependent downstream work. If it returns
-`NO_ISSUES`, keep that result transient and continue; do not write a PASS file.
+Also enforce nonadjacent location-state dependencies. A Segment returning to a
+continuing set after an insert, imagined sequence, flashback, or another location
+must wait for the last Segment in that location state chain. Bind the approved final
+state for current performance, the Location master for complete world/population
+authority, and the latest approved wide state when a visible set change makes that
+additional evidence necessary. Choosing the readable anchor
+frame is a continuity judgment made from direct review; Python may extract an
+explicitly chosen frame and validate bindings, but may not choose, infer, or fill it.
 
-## Boundaries
+An editorial dissolve or scene change does not by itself permit a set reset. New
+camera coverage is allowed; unexplained furniture, landmark, wardrobe, injury, or
+mutable-prop loss is not.
 
-Never change upstream story, dialogue, performance, design, Storyboard, shooting
-plan, or Seed Master Script. Never assemble the final film, replace native dialogue,
-mix final sound, or create subtitles. Those belong to postproduction.
+## Hard failures
+
+Stop before provider submission when:
+
+- the Prompt is empty or unreadable as UTF-8;
+- Prompt provider tokens differ from the private plan or first appear after a Shot
+  section;
+- the exact population lock is missing or repeated;
+- exact quoted dialogue and its readable speaker are outside the owning `Shot N:`
+  section;
+- the private plan and Storyboard disagree;
+- a recurring location is scheduled as independent despite an unfinished location
+  state chain, or a nonadjacent revisit is submitted before its state source review;
+- the Location master is missing from any Segment set there, including an
+  extension, or a tight predecessor frame/video is allowed to own the offscreen
+  world or complete population;
+- the embedded NPC roster differs from the Location authority or the Segment
+  permits an undeclared independent performer;
+- an embedded NPC is also bound independently, or a dialogue/story-active performer
+  is missing its separate identity/state reference;
+- an asset's identity, injury, wardrobe, group, prop, location, or voice state
+  conflicts with the Storyboard.
+
+Do not add deterministic Prompt-prose validators beyond these binding checks.
+Creative review may request a better Prompt, but it must judge the generated video
+and authored intent rather than enforce a textual template.
+
+Do not repair upstream story or Storyboard authority locally. Do not assemble the
+final film, replace native dialogue, mix final sound, or create subtitles.

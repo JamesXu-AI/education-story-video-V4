@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import sys
 import tempfile
 import unittest
@@ -14,12 +15,25 @@ if str(SCRIPT_ROOT) not in sys.path:
 from story_video.voice_reference_generation import (  # noqa: E402
     VoiceReferenceGenerationError,
     _normalize_to_contract,
+    _provider_prompt,
     _subtitle_alignment,
     _wav_evidence,
 )
 
 
 class VoiceReferenceGenerationTests(unittest.TestCase):
+    def test_voice_provider_prompt_is_exact_model_json_without_wrapper(self) -> None:
+        prompt = {
+            "text_en": "Every word fits now.",
+            "voice_direction_en": "A calm adult voice.",
+            "delivery_en": "Natural connected phrasing.",
+            "exclusions_en": ["Do not add words."],
+        }
+        self.assertEqual(
+            _provider_prompt({"voice_generation_prompt": prompt}),
+            json.dumps(prompt, ensure_ascii=False, indent=2),
+        )
+
     def _subtitle(
         self,
         *,

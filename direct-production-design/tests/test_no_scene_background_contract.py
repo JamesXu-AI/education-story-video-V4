@@ -11,9 +11,7 @@ if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
 from story_video.asset_catalog import ASSET_TYPES  # noqa: E402
-from story_video.location_continuity_packages import (  # noqa: E402
-    location_continuity_authority_for_storyboard,
-)
+import story_video.location_continuity_packages as location_packages  # noqa: E402
 from story_video.visual_asset_generation import ASSET_KINDS  # noqa: E402
 
 
@@ -36,37 +34,11 @@ class NoSceneBackgroundContractTests(unittest.TestCase):
             (SCRIPT_ROOT / "build_location_continuity_packages.py").exists()
         )
 
-    def test_storyboard_environment_authority_uses_location_master(self) -> None:
-        authority = location_continuity_authority_for_storyboard(
-            {"scene_id": "scene-001", "segment_id": "segment-001"},
-            {
-                "locations": [
-                    {
-                        "location_id": "location-001",
-                        "scene_ids": ["scene-001"],
-                        "scene_role_asset_ids": ["role-a", "role-b"],
-                        "environment_state_en": "Stable room.",
-                        "lighting_state_en": "Stable daylight.",
-                        "palette_materials_en": "Warm matte plaster.",
-                        "topology": {"zones": [{"zone_id": "room"}]},
-                        "landmarks": [
-                            {
-                                "landmark_id": "door",
-                                "world_relationship_en": "Door stays world-right.",
-                            }
-                        ],
-                    }
-                ]
-            },
+    def test_python_does_not_derive_storyboard_authority_fields(self) -> None:
+        self.assertFalse(
+            hasattr(location_packages, "location_continuity_authority_for_storyboard")
         )
-        self.assertEqual(
-            authority["reference_mode"],
-            "scene_cast_location_master_image_with_topology_text",
-        )
-        self.assertEqual(authority["location_master_asset_id"], "location-001")
-        self.assertEqual(authority["scene_role_asset_ids"], ["role-a", "role-b"])
-        self.assertNotIn("selected_view_ids", authority)
-        self.assertNotIn("screen_geography", authority)
+        self.assertFalse(hasattr(location_packages, "location_models_by_id"))
 
 
 if __name__ == "__main__":

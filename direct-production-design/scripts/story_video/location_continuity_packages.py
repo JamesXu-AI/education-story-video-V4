@@ -1,7 +1,7 @@
 """Strict loader for the production-design-owned location continuity packages.
 
 The package is the single textual spatial authority for every recurring location.
-The matching catalog Scene-cast location master is the visual environment authority.
+The matching catalog dressed Location master is the visual environment authority.
 """
 
 from __future__ import annotations
@@ -22,6 +22,9 @@ ROOT_KEYS = {"contract", "path_resolution", "locations"}
 LOCATION_KEYS = {
     "location_id",
     "scene_ids",
+    "embedded_npc_asset_ids",
+    "independent_performer_asset_ids",
+    "fixed_set_elements_en",
     "environment_state_en",
     "lighting_state_en",
     "palette_materials_en",
@@ -138,6 +141,30 @@ def _validate_location(
     scene_ids = _unique_texts(
         location["scene_ids"], f"{location_id}.scene_ids", allow_empty=False
     )
+    role_partitions: dict[str, list[str]] = {}
+    for field in ("embedded_npc_asset_ids", "independent_performer_asset_ids"):
+        role_partitions[field] = _unique_texts(
+            location[field], f"{location_id}.{field}"
+        )
+        if role_partitions[field] != asset[field]:
+            raise LocationContinuityError(
+                f"{location_id}.{field} must exactly match the catalog"
+            )
+    overlap = set(role_partitions["embedded_npc_asset_ids"]).intersection(
+        role_partitions["independent_performer_asset_ids"]
+    )
+    if overlap:
+        raise LocationContinuityError(
+            f"{location_id} role partitions overlap: {sorted(overlap)}"
+        )
+    fixed_set_elements = _unique_texts(
+        location["fixed_set_elements_en"],
+        f"{location_id}.fixed_set_elements_en",
+    )
+    if fixed_set_elements != asset["fixed_set_elements_en"]:
+        raise LocationContinuityError(
+            f"{location_id}.fixed_set_elements_en must exactly match the catalog"
+        )
     topology = _exact(
         location["topology"], TOPOLOGY_KEYS, f"{location_id}.topology"
     )
@@ -319,7 +346,8 @@ def _validate_location(
     return {
         "location_id": location_id,
         "scene_ids": scene_ids,
-        "scene_role_asset_ids": list(asset["included_role_asset_ids"]),
+        **role_partitions,
+        "fixed_set_elements_en": fixed_set_elements,
         "environment_state_en": _text(
             location["environment_state_en"], f"{location_id}.environment_state"
         ),
@@ -393,45 +421,4 @@ def load_location_continuity_packages(task_root: Path) -> dict[str, Any]:
         "contract": PACKAGE_CONTRACT,
         "path_resolution": "task_root_relative",
         "locations": locations,
-    }
-
-
-def location_models_by_id(package: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {
-        location["location_id"]: location["topology"]
-        for location in package["locations"]
-    }
-
-
-def location_continuity_authority_for_storyboard(
-    storyboard: dict[str, Any], package: dict[str, Any]
-) -> dict[str, Any]:
-    """Return compact topology while binding the one catalog location master."""
-
-    scene_id = storyboard.get("scene_id")
-    matches = [
-        location
-        for location in package.get("locations") or []
-        if scene_id in location.get("scene_ids", [])
-    ]
-    if len(matches) != 1:
-        raise LocationContinuityError(
-            f"Storyboard {storyboard.get('segment_id')} must resolve one location package."
-        )
-    location = matches[0]
-    return {
-        "location_id": location["location_id"],
-        "location_master_asset_id": location["location_id"],
-        "scene_role_asset_ids": list(location["scene_role_asset_ids"]),
-        "scene_id": scene_id,
-        "reference_mode": "scene_cast_location_master_image_with_topology_text",
-        "environment_state_en": location["environment_state_en"],
-        "lighting_state_en": location["lighting_state_en"],
-        "palette_materials_en": location["palette_materials_en"],
-        "zone_ids": [zone["zone_id"] for zone in location["topology"]["zones"]],
-        "landmark_relationships": {
-            landmark["landmark_id"]: landmark["world_relationship_en"]
-            for landmark in location["landmarks"]
-        },
-        "mirror_or_redesign_forbidden": True,
     }

@@ -61,23 +61,13 @@ automatic Segment continuity. Review mismatches visually and request a revision;
 not turn these presentation notes into mandatory asset-catalog fields or
 schema-validation failures.
 
-Every character-class image is staged in the location selected by the task-semantic
-`character_background_location_id`. Use that location's model-authored description,
-environment state, palette, materials, depth, and motivated light. This applies to
-identity portraits, costume/appearance-state plates, and ensemble portraits. Never
-use a plain, solid-color, studio, catalogue, cutout, empty, or transparent backdrop.
-The staged background does not make the character image an environment authority.
+Every character, costume/appearance-state, prop, and ensemble image uses the one
+exact pure-white studio background declared by the plan contract. A location master
+alone depicts a Scene environment.
 
-Its presentation expression must make the character's exact first authored
-Dialogue `delivery_en` readable through face, eyes, eyeline and grounded posture,
-with the mouth naturally closed. That concrete expression prevents a blank or
-incorrect portrait but remains presentation-only: it does not lock a temporary
-emotion, gaze or pose into the stable identity or later Segment continuity.
-
-For every character define desire, belief, pressure, emotional arc, attention,
-listening, speech preparation, anatomy-appropriate embodied action, settle behavior,
-and forbidden empty performance. Reveal intention through gaze, recognition, breath,
-blink, grounded weight, contact, reaction, changed state, and a settled hold.
+An identity portrait presents the reusable actor's characteristic presence and
+acting range, not the first Dialogue delivery or any temporary plot emotion. Story
+performance remains in the screenplay, performance map, and Storyboard.
 
 Every character must show active inner life: gaze selects a subject, expression
 reveals pressure or judgment, species-appropriate posture carries intention, and the
@@ -99,11 +89,21 @@ surface language, dressing density, cultural specificity, atmosphere, weather,
 time-of-day state, and background hierarchy. Dressing must support story function,
 depth, route comprehension, and focus; random decoration is not authority.
 
-Location assets govern stable geometry, production design, and the exhaustive Scene
-role population, not one final shot. Generate the Scene-cast location master only
-after its current role and fixed-prop assets, then include all of them visibly. Do
-not create an empty or character-free location plate. A materially different Scene
-cast requires a distinct location asset even when the physical place is unchanged.
+Location assets govern stable geometry, scene dressing, and any stable embedded NPC
+population, not one final shot. Production design infers the necessary fixed
+furniture, installed objects, and stable dressing from playable action,
+interaction, routes, spatial relationships, and recurring continuity, then authors
+them explicitly as the Location's fixed set.
+
+Classify on-screen role assets only after reading the complete screenplay and
+performance map. Embed a role only when it is non-speaking, incidental, stably
+present in every bound Scene, and requires no independently directed entrance,
+exit, action, interaction, gaze, reaction, state change, or identity continuity.
+Every other role is an independent performer. Generate the Location master after
+its fixed props and embedded NPC assets; show those elements visibly and exclude
+independent performers. Different independent performers may share the same
+Location master. A materially different embedded population requires a distinct
+master even when the physical place is unchanged.
 
 ## Props, costumes, and materials
 

@@ -1,7 +1,8 @@
 # Segment generation task
 
 One Seed Master `segment-NNN.md` equals one Seedance task and one audiovisual
-output. Ordered Shots inside that file remain internal camera/edit units.
+output. Its prose may represent shots, beats, transitions, or continuous action in
+any form and does not have to expose the private plan's Shot count.
 
 The request uses the exact materialized model, duration, resolution, ratio,
 operation-specific media, `generate_audio=true`, `watermark=false`, and
@@ -9,10 +10,13 @@ operation-specific media, `generate_audio=true`, `watermark=false`, and
 the provider assigns them from the ordered media list maintained by the execution
 plan.
 
-The plan is invalid without a current semantic PASS comparing the exact final
-Prompt/provider bindings with the selected `assets.json` declarations. Asset IDs
-and URLs alone are insufficient when their declared roles or states conflict.
+The plan is invalid when its private provider bindings conflict with the selected
+`assets.json` declarations or approved Storyboard. Prompt parsing is limited to
+the declared token set/placement, exact population lock, and dialogue ownership;
+other prose does not make the transport decision.
 
-Dependent media is exactly one of: complete predecessor with preserved audio;
-silent final 2.0-second predecessor tail plus provider last frame; or provider last
-frame only.
+Temporal dependent media is exactly one of: the complete approved predecessor with preserved
+audio for a true unfinished extension, or the approved provider last frame for a
+settled motivated cut. It is always combined with the current Location-master
+image. The temporal source owns recent action state; the Location owns the complete
+set and population outside the crop.

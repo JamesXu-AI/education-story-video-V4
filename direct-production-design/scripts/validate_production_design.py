@@ -4,10 +4,8 @@
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
 import json
 from pathlib import Path
-import re
 import sys
 
 
@@ -21,10 +19,6 @@ for script_root in (
         sys.path.insert(0, str(script_root))
 
 from story_video.asset_catalog import load_asset_catalog  # noqa: E402
-from story_video.asset_briefing import (  # noqa: E402
-    group_portrait_subject_count,
-    ordered_ensemble_member_types,
-)
 from story_video.aesthetic_reference import load_aesthetic_reference  # noqa: E402
 from story_video.location_continuity_packages import (  # noqa: E402
     load_location_continuity_packages,
@@ -32,6 +26,8 @@ from story_video.location_continuity_packages import (  # noqa: E402
 from story_video.character_performance_map import (  # noqa: E402
     load_character_performance_map,
 )
+from story_video.production_design_plan import load_production_design_plan  # noqa: E402
+from story_video.screenplay_contract import load_screenplay_file  # noqa: E402
 from story_video.validate_voice_authority import validate_voice_authority  # noqa: E402
 
 
@@ -39,34 +35,22 @@ class ProductionDesignError(RuntimeError):
     pass
 
 
-def _slug(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", text.casefold()).strip("-")
-
-
 def _validate_silent_group_authority(
-    performance: dict[str, object], catalog: dict[str, object]
+    plan: dict[str, object], catalog: dict[str, object]
 ) -> int:
-    entities = performance["performance_entities"]
-    segments = performance["scene_segment_calls"]
-    speaking_ids = {
-        call["entity_id"]
-        for segment in segments
-        for call in segment["calls"]
-        if call["speaks"]
-    }
-    grouped: dict[str, list[dict[str, object]]] = defaultdict(list)
-    for entity in entities:
-        if entity["entity_id"] not in speaking_ids:
-            grouped[entity["group_role_type_en"]].append(entity)
     assets = catalog["assets"]
     expected_ids: set[str] = set()
-    for role_type, role_entities in grouped.items():
-        asset_id = "group-" + _slug(role_type)
+    for ensemble in plan["ensemble_rosters"]:
+        asset_id = ensemble["asset_id"]
         expected_ids.add(asset_id)
         asset = assets.get(asset_id)
         if not isinstance(asset, dict) or asset.get("type") != "ensemble_roster":
             raise ProductionDesignError(
-                f"Missing current ensemble roster for silent role {role_type}: {asset_id}"
+                f"Missing model-authored ensemble roster {asset_id}"
+            )
+        if asset.get("description_en") != ensemble["description_en"]:
+            raise ProductionDesignError(
+                f"{asset_id} description differs from the model plan"
             )
         members = asset.get("members")
         if not isinstance(members, list) or len(members) != 1:
@@ -74,15 +58,21 @@ def _validate_silent_group_authority(
                 f"{asset_id} must contain exactly one current role-group record"
             )
         member = members[0]
-        expected_member_types = ordered_ensemble_member_types(role_entities)
-        expected_subject_count = group_portrait_subject_count(expected_member_types)
-        if member.get("allowed_member_types_en") != expected_member_types:
+        if member.get("member_type_id") != ensemble["member_type_id"]:
             raise ProductionDesignError(
-                f"{asset_id} allowed member types differ from current performance authority"
+                f"{asset_id} member_type_id differs from the model plan"
             )
-        if member.get("roster_asset", {}).get("subject_count") != expected_subject_count:
+        if member.get("allowed_member_types_en") != ensemble["allowed_member_types_en"]:
             raise ProductionDesignError(
-                f"{asset_id} subject count differs from its closed member-type roster"
+                f"{asset_id} allowed member types differ from the model plan"
+            )
+        if member.get("variation_profile") != ensemble["variation_profile"]:
+            raise ProductionDesignError(
+                f"{asset_id} variation profile differs from the model plan"
+            )
+        if member.get("roster_asset", {}).get("subject_count") != ensemble["subject_count"]:
+            raise ProductionDesignError(
+                f"{asset_id} subject count differs from the model plan"
             )
     actual_ids = {
         asset_id
@@ -114,7 +104,13 @@ def validate_task(task_dir: Path) -> dict[str, object]:
         raise ProductionDesignError("visual-production-spec.md lacks its required heading")
     catalog = load_asset_catalog(task_dir)
     performance = load_character_performance_map(task_dir)
-    silent_group_count = _validate_silent_group_authority(performance, catalog)
+    screenplay = load_screenplay_file(
+        task_dir / "screenplay-writer" / "screenplay.md"
+    )
+    plan = load_production_design_plan(
+        task_dir, performance=performance, screenplay=screenplay
+    )
+    silent_group_count = _validate_silent_group_authority(plan, catalog)
     aesthetic_reference = load_aesthetic_reference(task_dir)
     location_packages = load_location_continuity_packages(task_dir)
     expected_scene_ids = {

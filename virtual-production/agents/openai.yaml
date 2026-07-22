@@ -1,4 +1,4 @@
 interface:
   display_name: "Virtual Production · 虚拟制片"
-  short_description: "Validate real assets, compile Route B, and run Seedance"
-  default_prompt: "Use $virtual-production to invoke Seed Master Route B, compare every final Prompt binding with assets.json semantics, route incompatibilities back to production design, materialize approved provider values, and execute the authored Seedance shooting-plan waves."
+  short_description: "Compile clean natural-language Seedance prompts"
+  default_prompt: "Use $virtual-production with Seedance Master Route B to compile storyboard.md into concise natural-language consecutive Shot N prompts. Bind the dressed Location master in every Segment, including video extension, for the complete fixed set and embedded NPC population; use predecessor media only for temporal state and separately bind every required independent performer. State one exact readable population lock. Keep all JSON, IDs, manifests, matrices, hashes, and runtime fields outside the provider prompt, then validate assets and execute the approved shooting plan."

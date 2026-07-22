@@ -390,6 +390,47 @@ def _minimum_display_interval(
     return start, end
 
 
+def _required_display_duration(
+    text: str,
+    chunks: list[tuple[str, str]],
+    *,
+    is_cjk: bool,
+    minimum_duration: float,
+    style: dict[str, Any],
+) -> float:
+    """Return the shortest proportional caption interval that passes every limit."""
+
+    weights = [
+        len("".join(chunk_text.split())) if is_cjk else len(chunk_text.split())
+        for chunk_text, _ in chunks
+    ]
+    total_weight = sum(weights)
+    if not weights or any(weight <= 0 for weight in weights) or total_weight <= 0:
+        raise SubtitleBuildError("Caption duration calculation produced an empty cue.")
+    minimum_for_each_chunk = max(
+        minimum_duration * total_weight / weight for weight in weights
+    )
+    if is_cjk:
+        units_per_second = _number(
+            style["maximum_characters_per_second_cjk"],
+            "maximum_characters_per_second_cjk",
+            minimum=0.1,
+        )
+    else:
+        words_per_minute = _number(
+            style["maximum_words_per_minute_latin"],
+            "maximum_words_per_minute_latin",
+            minimum=1,
+        )
+        units_per_second = words_per_minute / 60.0
+    minimum_for_readability = total_weight / units_per_second
+    return max(
+        minimum_duration,
+        minimum_for_each_chunk,
+        minimum_for_readability,
+    )
+
+
 def _readability(text: str, duration: float, style: dict[str, Any]) -> dict[str, Any]:
     if duration <= 0:
         raise SubtitleBuildError("Subtitle duration must be positive.")
@@ -521,6 +562,14 @@ def compile_cues(task_dir: Path, style_path: Path) -> dict[str, Any]:
         raise SubtitleBuildError("subtitle max_lines must be positive.")
     cues: list[dict[str, Any]] = []
     source_cue_count = 0
+    editorial_refinement = edl.get("editorial_refinement")
+    subtitle_timing_overrides = (
+        editorial_refinement.get("subtitle_timing_overrides", {})
+        if isinstance(editorial_refinement, dict)
+        else {}
+    )
+    if not isinstance(subtitle_timing_overrides, dict):
+        raise SubtitleBuildError("EDL subtitle_timing_overrides must be an object.")
     for segment_id, storyboard in storyboards.items():
         if storyboard.get("segment_id") != segment_id:
             raise SubtitleBuildError(f"Storyboard identity mismatch: {segment_id}")
@@ -529,9 +578,21 @@ def compile_cues(task_dir: Path, style_path: Path) -> dict[str, Any]:
         storyboard_duration = _number(
             storyboard.get("duration_seconds"), f"{segment_id} Storyboard duration"
         )
-        if abs(event_duration - storyboard_duration) > 0.25:
+        source_in = _number(
+            event.get("source_in_seconds", 0.0), f"{segment_id} EDL source in"
+        )
+        source_out = _number(
+            event.get("source_out_seconds"), f"{segment_id} EDL source out"
+        )
+        if source_in < 0 or source_out <= source_in:
+            raise SubtitleBuildError(f"{segment_id} EDL source range is invalid.")
+        if source_out > storyboard_duration + 0.25:
             raise SubtitleBuildError(
-                f"{segment_id} actual EDL duration differs from Storyboard by more than 0.25s."
+                f"{segment_id} EDL source out exceeds the Storyboard duration."
+            )
+        if abs(event_duration - (source_out - source_in)) > 0.05:
+            raise SubtitleBuildError(
+                f"{segment_id} EDL duration differs from its editorial source range."
             )
         ordered_source_cues = [
             cue
@@ -544,51 +605,50 @@ def compile_cues(task_dir: Path, style_path: Path) -> dict[str, Any]:
             id(source_cue): index
             for index, source_cue in enumerate(ordered_source_cues)
         }
+
+        def source_interval(source_cue: dict[str, Any]) -> tuple[float, float, bool]:
+            cue_id = str(source_cue.get("cue_id") or "")
+            authored_start = _number(source_cue.get("start_seconds"), "cue start")
+            authored_end = _number(source_cue.get("end_seconds"), "cue end")
+            override = subtitle_timing_overrides.get(cue_id)
+            if override is None:
+                return authored_start, authored_end, False
+            if not isinstance(override, dict):
+                raise SubtitleBuildError(
+                    f"Subtitle timing override must be an object: {cue_id}"
+                )
+            return (
+                _number(
+                    override.get("source_start_seconds"),
+                    f"{cue_id} overridden source start",
+                ),
+                _number(
+                    override.get("source_end_seconds"),
+                    f"{cue_id} overridden source end",
+                ),
+                True,
+            )
+
         for block in storyboard.get("timeline_blocks", []):
             if not isinstance(block, dict):
                 raise SubtitleBuildError(f"{segment_id} contains an invalid block.")
             for cue in block.get("dialogue_cues", []):
                 if not isinstance(cue, dict):
                     raise SubtitleBuildError(f"{segment_id} contains an invalid cue.")
-                relative_start = _number(cue.get("start_seconds"), "cue start")
-                relative_end = _number(cue.get("end_seconds"), "cue end")
-                if relative_end <= relative_start or relative_end > event_duration + 0.05:
-                    raise SubtitleBuildError(f"{segment_id} cue lies outside actual picture event.")
-                authored_start = relative_start
-                authored_end = relative_end
-                minimum = _number(
-                    style["minimum_cue_duration_seconds"],
-                    "minimum_cue_duration_seconds",
-                )
-                source_position = source_cue_positions[id(cue)]
-                previous_end = (
-                    _number(
-                        ordered_source_cues[source_position - 1].get("end_seconds"),
-                        "previous cue end",
+                authored_start = _number(cue.get("start_seconds"), "cue start")
+                authored_end = _number(cue.get("end_seconds"), "cue end")
+                source_start, source_end, timing_overridden = source_interval(cue)
+                if source_end <= source_start:
+                    raise SubtitleBuildError(f"{segment_id} cue timing is invalid.")
+                if source_start < source_in - 0.05 or source_end > source_out + 0.05:
+                    raise SubtitleBuildError(
+                        f"{segment_id} editorial trim intersects dialogue cue {cue.get('cue_id')}."
                     )
-                    if source_position > 0
-                    else 0.0
-                )
-                next_start = (
-                    _number(
-                        ordered_source_cues[source_position + 1].get("start_seconds"),
-                        "next cue start",
-                    )
-                    if source_position + 1 < len(ordered_source_cues)
-                    else event_duration
-                )
-                relative_start, relative_end = _minimum_display_interval(
-                    relative_start,
-                    relative_end,
-                    previous_end=previous_end,
-                    next_start=next_start,
-                    minimum_duration=minimum,
-                )
-                duration = relative_end - relative_start
+                relative_start = max(0.0, source_start - source_in)
+                relative_end = min(event_duration, source_end - source_in)
                 text = str(cue.get("exact_text", "")).strip()
                 if not text:
                     raise SubtitleBuildError(f"{segment_id} cue has no exact text.")
-                source_cue_count += 1
                 is_cjk = _is_cjk(text)
                 line_limit = int(
                     style[
@@ -603,6 +663,44 @@ def compile_cues(task_dir: Path, style_path: Path) -> dict[str, Any]:
                     line_limit=line_limit,
                     max_lines=max_lines,
                 )
+                minimum = _number(
+                    style["minimum_cue_duration_seconds"],
+                    "minimum_cue_duration_seconds",
+                )
+                required_duration = _required_display_duration(
+                    text,
+                    chunks,
+                    is_cjk=is_cjk,
+                    minimum_duration=minimum,
+                    style=style,
+                )
+                source_position = source_cue_positions[id(cue)]
+                previous_end = (
+                    max(
+                        0.0,
+                        source_interval(ordered_source_cues[source_position - 1])[1]
+                        - source_in,
+                    )
+                    if source_position > 0
+                    else 0.0
+                )
+                next_start = (
+                    min(
+                        event_duration,
+                        source_interval(ordered_source_cues[source_position + 1])[0]
+                        - source_in,
+                    )
+                    if source_position + 1 < len(ordered_source_cues)
+                    else event_duration
+                )
+                relative_start, relative_end = _minimum_display_interval(
+                    relative_start,
+                    relative_end,
+                    previous_end=previous_end,
+                    next_start=next_start,
+                    minimum_duration=required_duration,
+                )
+                source_cue_count += 1
                 intervals = _caption_intervals(
                     relative_start,
                     relative_end,
@@ -642,6 +740,9 @@ def compile_cues(task_dir: Path, style_path: Path) -> dict[str, Any]:
                             "language": language,
                             "authored_segment_start_seconds": round(authored_start, 3),
                             "authored_segment_end_seconds": round(authored_end, 3),
+                            "source_segment_start_seconds": round(source_start, 3),
+                            "source_segment_end_seconds": round(source_end, 3),
+                            "editorial_timing_override_applied": timing_overridden,
                             "segment_start_seconds": round(part_start, 3),
                             "segment_end_seconds": round(part_end, 3),
                             "timeline_start_seconds": round(timeline_start, 3),

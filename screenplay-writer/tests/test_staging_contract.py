@@ -156,34 +156,19 @@ class StagingContractTests(unittest.TestCase):
         with self.assertRaisesRegex(StoryVideoError, "Landing Moment / Result"):
             parse_screenplay_markdown(invalid)
 
-    def test_present_at_open_must_be_visible_at_zero_seconds(self) -> None:
-        invalid = VALID_SCREENPLAY.replace(
+    def test_staging_moments_allow_free_form_timing_language(self) -> None:
+        free_form = VALID_SCREENPLAY.replace(
             "t=0.0s: Owl is already visible at the near table edge.",
-            "t=0.8s: Owl becomes visible at the near table edge.",
-        )
-        with self.assertRaisesRegex(StoryVideoError, "first visible at t=0.0s"):
-            parse_screenplay_markdown(invalid)
-
-    def test_entrance_cannot_claim_first_visibility_at_zero_seconds(self) -> None:
-        invalid = VALID_SCREENPLAY.replace(
-            "| owl | on_screen | present_at_open | opening |",
-            "| owl | on_screen | enters | A branch snap draws Owl into the room. |",
-        )
-        with self.assertRaisesRegex(StoryVideoError, "must follow t=0.0s"):
-            parse_screenplay_markdown(invalid)
-
-    def test_first_visible_time_must_fall_inside_referenced_shot(self) -> None:
-        invalid = VALID_SCREENPLAY.replace(
-            "t=0.0s: Owl is already visible at the near table edge.",
-            "t=5.0s: Owl becomes visible at the near table edge.",
+            "At the opening beat, Owl is already visible at the near table edge.",
         ).replace(
             "t=0.6s: Owl remains visibly settled before rotating the map.",
-            "t=5.5s: Owl settles at the near table edge.",
-        ).replace(
-            "present_at_open | opening", "enters | A branch snap draws Owl inside"
+            "After the leaves tap, Owl remains visibly settled before rotating the map.",
         )
-        with self.assertRaisesRegex(StoryVideoError, "outside its referenced Shot"):
-            parse_screenplay_markdown(invalid)
+        parsed = parse_screenplay_markdown(free_form)
+        self.assertIn(
+            "opening beat",
+            parsed["segments"][0]["performance_calls"][0]["first_visible_moment_en"],
+        )
 
     def test_gaze_table_must_cover_every_visible_performer(self) -> None:
         invalid = VALID_SCREENPLAY.replace(
@@ -218,13 +203,23 @@ class StagingContractTests(unittest.TestCase):
         with self.assertRaisesRegex(StoryVideoError, "authored audio event"):
             parse_screenplay_markdown(invalid)
 
-    def test_shot_durations_must_equal_scene_unit_duration(self) -> None:
-        invalid = VALID_SCREENPLAY.replace(
+    def test_shot_duration_estimates_do_not_have_to_equal_scene_unit_duration(self) -> None:
+        screenplay = VALID_SCREENPLAY.replace(
             "| A-002 | BEAT-001B | insert | 4 |",
             "| A-002 | BEAT-001B | insert | 3 |",
         )
-        with self.assertRaisesRegex(StoryVideoError, "Shot durations"):
-            parse_screenplay_markdown(invalid)
+        parsed = parse_screenplay_markdown(screenplay)
+        self.assertEqual(parsed["segments"][0]["shots"][1]["duration_seconds"], 3.0)
+
+    def test_dialogue_must_fit_the_2_6_words_per_second_floor(self) -> None:
+        screenplay = VALID_SCREENPLAY.replace(
+            'text="The river bends behind us."',
+            'text="The river bends behind us and the long winding road continues '
+            'past every tall tree until the distant mountain disappears beyond the '
+            'wide valley under the morning sky."',
+        )
+        with self.assertRaisesRegex(StoryVideoError, "2.6 words-per-second"):
+            parse_screenplay_markdown(screenplay)
 
 
 if __name__ == "__main__":

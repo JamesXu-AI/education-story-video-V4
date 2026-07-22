@@ -36,12 +36,11 @@ if str(SHARED_PROVIDER_PATH) not in providers.__path__:
 from story_video.seed_master_runtime import (  # noqa: E402
     SCRIPT_DIR_RELATIVE,
     load_execution_plan,
-    manifest_segment_rows,
+    storyboard_segment_rows,
     parse_segment_script as parse_seed_master_script,
     sha256_file,
     token_sort_key,
 )
-from story_video.asset_compatibility import RECEIPT_CONTRACT  # noqa: E402
 from preflight_segment import preflight_segment  # noqa: E402
 from providers import seedance  # noqa: E402
 from validate_segment_scripts import validate_task as validate_segment_scripts  # noqa: E402
@@ -144,9 +143,6 @@ def parse_segment_script(path: Path, *, task_dir: Path | None = None) -> dict[st
         "operation": shooting["operation"],
         "required_predecessor_evidence": shooting["required_predecessor_evidence"],
         "seedance_parameters": plan["seedance_parameters"],
-        "asset_compatibility_review_sha256": plan["asset_compatibility"][
-            "review_sha256"
-        ],
     }
 
 
@@ -176,7 +172,7 @@ def discover_segments(
     task_dir: Path, *, segment_ids: list[str] | None = None
 ) -> list[dict[str, Any]]:
     validate_segment_scripts(task_dir, segment_ids=segment_ids)
-    all_ids = [str(item["segment_id"]) for item in manifest_segment_rows(task_dir)]
+    all_ids = [str(item["segment_id"]) for item in storyboard_segment_rows(task_dir)]
     selected_ids = all_ids if segment_ids is None else segment_ids
     script_dir = task_dir / SCRIPT_DIR_RELATIVE
     paths = [script_dir / f"{segment_id}.md" for segment_id in selected_ids]
@@ -392,18 +388,6 @@ def _runtime_reference_media_content(
 def request_payload(
     segment: dict[str, Any], *, task_dir: Path, resolution: str, ratio: str
 ) -> dict[str, Any]:
-    compatibility = segment["execution_plan"].get("asset_compatibility")
-    if (
-        not isinstance(compatibility, dict)
-        or compatibility.get("contract")
-        != RECEIPT_CONTRACT
-        or compatibility.get("overall_verdict") != "PASS"
-        or compatibility.get("final_prompt_sha256")
-        != hashlib.sha256(segment["prompt"].encode("utf-8")).hexdigest()
-    ):
-        raise SegmentGenerationError(
-            f"{segment['generation_task_id']} final Prompt is not approved against assets.json semantics"
-        )
     parameters = segment["seedance_parameters"]
     if parameters["resolution"] != resolution or parameters["ratio"] != ratio:
         raise SegmentGenerationError(
@@ -438,7 +422,7 @@ def request_payload(
     )
     if actual_tokens != expected_tokens or len(actual_tokens) != len(set(actual_tokens)):
         raise SegmentGenerationError(
-            f"{segment['generation_task_id']} runtime media does not exactly replace Prompt tokens"
+            f"{segment['generation_task_id']} runtime media differs from the private plan"
         )
     content: list[dict[str, Any]] = [{"type": "text", "text": segment["prompt"]}]
     for item in sorted(media_content, key=lambda value: token_sort_key(value["_provider_token"])):
@@ -600,8 +584,6 @@ def _completed_result(
         or record.get("seed_master_script_sha256") != segment["script_sha256"]
         or record.get("seedance_execution_plan_sha256")
         != sha256_file(segment["execution_plan_path"])
-        or record.get("asset_compatibility_review_sha256")
-        != segment["asset_compatibility_review_sha256"]
         or record.get("operation") != segment["operation"]
     ):
         raise SegmentGenerationError(
@@ -618,9 +600,6 @@ def _completed_result(
         "seedance_execution_plan_sha256": sha256_file(
             segment["execution_plan_path"]
         ),
-        "asset_compatibility_review_sha256": segment[
-            "asset_compatibility_review_sha256"
-        ],
         "operation": segment["operation"],
     }
 
@@ -831,9 +810,6 @@ def generate_one(
             "seedance_execution_plan_sha256": sha256_file(
                 segment["execution_plan_path"]
             ),
-            "asset_compatibility_review_sha256": segment[
-                "asset_compatibility_review_sha256"
-            ],
             "operation": segment["operation"],
             "submission_revision": attempt_number,
             "segment_script_path": "segment-script.md",
@@ -862,9 +838,6 @@ def generate_one(
         "seedance_execution_plan_sha256": sha256_file(
             segment["execution_plan_path"]
         ),
-        "asset_compatibility_review_sha256": segment[
-            "asset_compatibility_review_sha256"
-        ],
         "operation": segment["operation"],
     }
 
@@ -958,7 +931,7 @@ def run(args: argparse.Namespace) -> int:
         raise SegmentGenerationError(f"Task directory does not exist: {task_dir}")
     task = _task_contract(task_dir)
     all_segment_ids = [
-        str(item["segment_id"]) for item in manifest_segment_rows(task_dir)
+        str(item["segment_id"]) for item in storyboard_segment_rows(task_dir)
     ]
     if args.segments:
         unknown = sorted(set(args.segments) - set(all_segment_ids))
@@ -1105,9 +1078,6 @@ def run(args: argparse.Namespace) -> int:
                         ],
                         "seedance_execution_plan_sha256": item[
                             "seedance_execution_plan_sha256"
-                        ],
-                        "asset_compatibility_review_sha256": item[
-                            "asset_compatibility_review_sha256"
                         ],
                         "operation": item["operation"],
                         "video_path": Path(item["video_path"])

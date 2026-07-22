@@ -24,7 +24,7 @@ Before assembly, require `virtual-production/generation-state.json` to report
 `GENERATED` with exactly one complete audiovisual output and matching operational
 production record for every current screenplay Segment. Require each record to
 match the current Seed Master Script, execution plan, operation, provider attempt,
-and final-Prompt/`assets.json` semantic compatibility review hash. Probe the actual
+and current resolved media bindings. Probe the actual
 media and stop on missing, stale, failed, corrupt, silent, or reordered coverage.
 Independent review is callable for diagnosis but never a required approval file.
 

@@ -16,13 +16,85 @@ if str(SCRIPT_ROOT) not in sys.path:
 
 import generate_segment_videos as generation_module  # noqa: E402
 from generate_segment_videos import (  # noqa: E402
-    SegmentGenerationError,
     _storyboard_topological_waves,
     request_payload,
 )
 
 
 class GenerationRequestTests(unittest.TestCase):
+    def test_video_extension_request_keeps_location_image_and_predecessor_video(self) -> None:
+        prompt = "Continue the action in the approved room with no additional people."
+        parameters = {
+            "model": "seedance-test-model",
+            "duration": 8,
+            "resolution": "720p",
+            "ratio": "16:9",
+            "generate_audio": True,
+            "watermark": False,
+            "return_last_frame": True,
+            "execution_expires_after": 172800,
+            "priority": 0,
+        }
+        media_bindings = [
+            {
+                "provider_token": "@Image1",
+                "provider_role": "reference_image",
+                "source_kind": "asset_catalog",
+            },
+            {
+                "provider_token": "@Video1",
+                "provider_role": "reference_video",
+                "source_kind": "complete_predecessor_video",
+            },
+        ]
+        segment = {
+            "generation_task_id": "segment-002",
+            "prompt": prompt,
+            "references": [
+                {
+                    **media_bindings[0],
+                    "asset_id": "location-room",
+                    "uri": "https://example.test/location-room.png",
+                }
+            ],
+            "audio_references": [],
+            "runtime_media": [media_bindings[1]],
+            "execution_plan": {
+                "media_bindings": media_bindings,
+                "asset_compatibility": {
+                    "contract": "prompt-assets-json-compatibility-receipt-v3",
+                    "overall_verdict": "PASS",
+                    "final_prompt_sha256": hashlib.sha256(
+                        prompt.encode("utf-8")
+                    ).hexdigest(),
+                },
+            },
+            "seedance_parameters": parameters,
+        }
+        runtime_content = [
+            {
+                "type": "video_url",
+                "video_url": {"url": "https://example.test/predecessor.mp4"},
+                "role": "reference_video",
+                "_provider_token": "@Video1",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            generation_module,
+            "_runtime_reference_media_content",
+            return_value=runtime_content,
+        ):
+            payload = request_payload(
+                segment,
+                task_dir=Path(directory),
+                resolution="720p",
+                ratio="16:9",
+            )
+        self.assertEqual(
+            [item.get("role") for item in payload["content"][1:]],
+            ["reference_image", "reference_video"],
+        )
+
     def test_request_uses_materialized_values_and_provider_token_order(self) -> None:
         parameters = {
             "model": "seedance-test-model",
@@ -47,7 +119,14 @@ class GenerationRequestTests(unittest.TestCase):
                 "source_kind": "asset_catalog",
             },
         ]
-        prompt = "## Part 1\n## Part 2\n## Part 3"
+        prompt = (
+            "Operation: Multimodal reference, 8 seconds, 16:9, 1080p, native audio on.\n\n"
+            "Use the room in @Image1 for layout. Use @Audio1 only for the hero's voice.\n\n"
+            "Scene: A warm family room at evening.\n\n"
+            "Shot 1: The locked camera watches the hero close a book and look up.\n\n"
+            "Style and image quality: Warm natural contrast and clean facial detail.\n\n"
+            "Constraints and end state: Subtitle-free, no logo, no watermark; end on the closed book."
+        )
         segment = {
             "generation_task_id": "segment-001",
             "duration": 8,
@@ -70,7 +149,7 @@ class GenerationRequestTests(unittest.TestCase):
             "execution_plan": {
                 "media_bindings": media_bindings,
                 "asset_compatibility": {
-                    "contract": "prompt-assets-json-compatibility-receipt-v2",
+                    "contract": "prompt-assets-json-compatibility-receipt-v3",
                     "overall_verdict": "PASS",
                     "final_prompt_sha256": hashlib.sha256(
                         prompt.encode("utf-8")
@@ -95,7 +174,7 @@ class GenerationRequestTests(unittest.TestCase):
             ["reference_image", "reference_audio"],
         )
 
-    def test_request_rejects_transport_only_asset_resolution(self) -> None:
+    def test_request_does_not_require_a_prompt_semantic_receipt(self) -> None:
         prompt = "Final Prompt requiring an injured exact-state character."
         segment = {
             "generation_task_id": "segment-001",
@@ -110,13 +189,13 @@ class GenerationRequestTests(unittest.TestCase):
             },
         }
         with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaises(SegmentGenerationError):
-                request_payload(
-                    segment,
-                    task_dir=Path(directory),
-                    resolution="1080p",
-                    ratio="16:9",
-                )
+            payload = request_payload(
+                segment,
+                task_dir=Path(directory),
+                resolution="1080p",
+                ratio="16:9",
+            )
+        self.assertEqual(payload["content"], [{"type": "text", "text": prompt}])
 
     def test_scheduler_uses_only_seed_master_shooting_plan_dependencies(self) -> None:
         segments = [
@@ -202,7 +281,7 @@ class GenerationRequestTests(unittest.TestCase):
                 ),
                 patch.object(
                     generation_module,
-                    "manifest_segment_rows",
+                    "storyboard_segment_rows",
                     return_value=[{"segment_id": "segment-001"}],
                 ),
                 patch.object(
@@ -291,7 +370,7 @@ class GenerationRequestTests(unittest.TestCase):
                 ),
                 patch.object(
                     generation_module,
-                    "manifest_segment_rows",
+                    "storyboard_segment_rows",
                     return_value=[{"segment_id": "segment-001"}],
                 ),
                 patch.object(

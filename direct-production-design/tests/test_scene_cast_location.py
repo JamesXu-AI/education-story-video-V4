@@ -10,97 +10,134 @@ if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
 from build_initial_production_design import (  # noqa: E402
-    InitialProductionDesignError,
-    _role_asset_ids_by_entity,
-    _scene_role_assets_by_location,
+    _final_catalog,
+    _final_location_packages,
+    _jobs_from_model_plan,
+)
+from story_video.production_design_plan import (  # noqa: E402
+    PURE_WHITE_BACKGROUND_EN,
+    STYLE_AUTHORITY_EN,
+    render_generation_prompt,
 )
 
 
-class SceneCastLocationTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.entities = [
-            {"entity_id": "speaker-a"},
-            {"entity_id": "speaker-b"},
-            {"entity_id": "silent-pack"},
-        ]
-        self.silent_groups = [
-            ("watchful pack", [{"entity_id": "silent-pack"}])
-        ]
+class ExplicitPlanExecutionTests(unittest.TestCase):
+    def test_job_copies_exact_model_prompt_and_reference_order(self) -> None:
+        prompt = {
+            "intent_en": "Create one exact asset.",
+            "subject_en": "A model-authored subject.",
+            "background_en": PURE_WHITE_BACKGROUND_EN,
+            "composition_en": "A model-authored composition.",
+            "continuity": {
+                "reference_asset_ids": ["prop-a", "actor-a"],
+                "locks_en": ["A model-authored lock."],
+            },
+            "style_en": STYLE_AUTHORITY_EN,
+            "exclusions_en": ["A model-authored exclusion."],
+        }
+        plan = {
+            "characters": [],
+            "ensemble_rosters": [],
+            "props": [
+                {
+                    "type": "prop",
+                    "asset_id": "asset-a",
+                    "media_path": "assets/props/asset-a/image.png",
+                    "generation_prompt": prompt,
+                }
+            ],
+            "costumes": [],
+            "locations": [],
+        }
 
-    def test_scene_cast_is_derived_from_performance_entities(self) -> None:
-        binding = _role_asset_ids_by_entity(
-            entities=self.entities,
-            speaking_ids={"speaker-a", "speaker-b"},
-            silent_groups=self.silent_groups,
+        job = _jobs_from_model_plan(plan)[0]
+
+        self.assertEqual(job["prompt"], render_generation_prompt(prompt))
+        self.assertEqual(job["references"], ["prop-a", "actor-a"])
+        self.assertEqual(job["depends_on"], ["prop-a", "actor-a"])
+
+    def test_builder_contains_no_scene_cast_or_prompt_deriver(self) -> None:
+        source = (SCRIPT_ROOT / "build_initial_production_design.py").read_text(
+            encoding="utf-8"
         )
-        result = _scene_role_assets_by_location(
-            plan={
-                "locations": [
-                    {"location_id": "loc-one", "scene_ids": ["scene-a"]}
-                ]
+        for removed in (
+            "_scene_role_assets_by_location",
+            "_role_asset_ids_by_entity",
+            "silent_group_portrait_brief",
+            "_aesthetic_prompt",
+            "TASK-AUTHORED",
+            "Generate one full-body",
+        ):
+            self.assertNotIn(removed, source)
+
+    def test_location_semantics_are_copied_without_python_authorship(self) -> None:
+        location = {
+            "type": "location_master",
+            "location_id": "loc-room",
+            "scene_ids": ["scene-001"],
+            "description_en": "One stable room.",
+            "included_prop_ids": [],
+            "embedded_npc_asset_ids": ["background-neighbors"],
+            "independent_performer_asset_ids": ["actor-a"],
+            "fixed_set_elements_en": [
+                "A low wooden table remains fixed between both chairs."
+            ],
+            "environment_state_en": "Quiet evening room.",
+            "lighting_state_en": "Warm practical light.",
+            "palette_materials_en": "Cream textile and matte wood.",
+            "topology": {
+                "zones": [],
+                "connections": [],
+                "entrances_exits": [],
+                "fixed_obstacles": [],
+                "fixed_prop_placements": [],
             },
-            performance={
-                "scene_segment_calls": [
-                    {
-                        "scene_id": "scene-a",
-                        "calls": [
-                            {"entity_id": "speaker-a", "presence_mode": "on_screen"},
-                            {"entity_id": "silent-pack", "presence_mode": "on_screen"},
-                            {"entity_id": "speaker-b", "presence_mode": "voice_only"},
-                        ],
-                    }
-                ]
-            },
-            entities=self.entities,
-            role_asset_by_entity=binding,
+            "landmarks": [{"landmark_id": "table"}],
+            "media_path": "assets/locations/room/master.png",
+            "generation_prompt": {},
+        }
+        plan = {
+            "characters": [],
+            "ensemble_rosters": [],
+            "props": [],
+            "costumes": [],
+            "locations": [location],
+        }
+        visual = {
+            "loc-room": {
+                "path": "assets/locations/room/master.png",
+                "uri": "https://example.test/room.png",
+            }
+        }
+
+        catalog = _final_catalog(plan, visuals=visual, voice_references={})
+        package = _final_location_packages(plan)
+
+        self.assertEqual(
+            catalog["assets"]["loc-room"]["fixed_set_elements_en"],
+            location["fixed_set_elements_en"],
         )
         self.assertEqual(
-            result["loc-one"], ["speaker-a", "group-watchful-pack"]
+            catalog["assets"]["loc-room"]["embedded_npc_asset_ids"],
+            ["background-neighbors"],
         )
-
-    def test_one_location_cannot_hide_different_scene_casts(self) -> None:
-        binding = _role_asset_ids_by_entity(
-            entities=self.entities,
-            speaking_ids={"speaker-a", "speaker-b"},
-            silent_groups=self.silent_groups,
+        self.assertEqual(
+            catalog["assets"]["loc-room"]["independent_performer_asset_ids"],
+            ["actor-a"],
         )
-        with self.assertRaisesRegex(
-            InitialProductionDesignError, "different on-screen casts"
-        ):
-            _scene_role_assets_by_location(
-                plan={
-                    "locations": [
-                        {
-                            "location_id": "loc-one",
-                            "scene_ids": ["scene-a", "scene-b"],
-                        }
-                    ]
-                },
-                performance={
-                    "scene_segment_calls": [
-                        {
-                            "scene_id": "scene-a",
-                            "calls": [
-                                {
-                                    "entity_id": "speaker-a",
-                                    "presence_mode": "on_screen",
-                                }
-                            ],
-                        },
-                        {
-                            "scene_id": "scene-b",
-                            "calls": [
-                                {
-                                    "entity_id": "speaker-b",
-                                    "presence_mode": "on_screen",
-                                }
-                            ],
-                        },
-                    ]
-                },
-                entities=self.entities,
-                role_asset_by_entity=binding,
-            )
+        self.assertEqual(
+            package["locations"][0]["fixed_set_elements_en"],
+            location["fixed_set_elements_en"],
+        )
+        self.assertEqual(
+            package["locations"][0]["embedded_npc_asset_ids"],
+            ["background-neighbors"],
+        )
+        self.assertEqual(
+            package["locations"][0]["independent_performer_asset_ids"],
+            ["actor-a"],
+        )
+        self.assertEqual(package["locations"][0]["topology"], location["topology"])
 
 
 if __name__ == "__main__":

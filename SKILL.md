@@ -23,11 +23,11 @@ Never use `skill-creator` to perform story, design, cinematography, generation,
 review, sound, editing, or delivery work.
 
 The sole external production-Skill exception is `seedance-master-skill`, with two
-explicit entry points. `previsualize-cinematography` invokes Route A and transports
-its Storyboard package unchanged. `virtual-production` invokes Route B and any
-shooting-plan-required observed successor recompilation, then resolves provider
-tokens and executes the returned Scripts. No other department may invoke Seed
-Master.
+explicit entry points. `previsualize-cinematography` invokes Route A and releases
+only one self-contained `storyboard.md`. `virtual-production` invokes Route B and
+any shooting-plan-required observed successor recompilation, then resolves provider
+tokens and executes the returned natural-language Scripts. No other department may
+invoke Seed Master.
 
 Treat only these repository-local Skills as internal production departments:
 
@@ -98,6 +98,15 @@ the active task; never turn review into a separate approval-file workflow.
 3. After the role/asset-scope gate returns `PASS` with image generation unlocked,
    start `direct-production-design`; do not launch a separate Codex screenplay
    reviewer.
+   Production design also owns semantic scene dressing: it interprets playable
+   action, interactions, routes, geography, and recurrence to author each
+   Location's necessary fixed furniture, installed props, and stable dressing.
+   It also understands the screenplay well enough to separate stable incidental
+   NPC population from independent performers. The Location master visibly contains
+   its fixed set and embedded NPCs only; every dialogue or story-active role remains
+   a separate performer reference. Both role lists are model-authored and carried
+   into `assets.json`; Python validates and copies them but never classifies a role
+   or infers content from keywords.
    Before production-design generation, run `build_initial_production_design.py
    --inspect-semantic-reuse`. For every returned candidate, Codex directly decides
    whether the old and current visual meanings are equivalent by applying
@@ -111,46 +120,84 @@ the active task; never turn review into a separate approval-file workflow.
    current valid production-design authorities before executing
    `previsualize-cinematography`.
    Pass the original request and complete upstream inputs to that shell. It invokes
-   `seedance-master-skill` and returns the result unchanged. Persist Seed Master's
-   returned `storyboard.md` and `storyboard-compile-manifest.json` bytes verbatim at
-   `TASK_DIR/previsualize-cinematography/`; do not add a local schema, converted
-   companion, wrapper, or acceptance layer. `storyboard.data.json` does not exist
-   and is forbidden throughout the repository. Route A must return missing or
-   contradictory screenplay authority to its owner, then convert accepted
-   story-facing Shot rows into final one-task Shots with motivated camera, layered
-   blocking, selective ensemble control, and passed cinematic reviews. Route A must make
+   `seedance-master-skill` under the repository-local single-file Storyboard
+   contract. Persist only the returned `storyboard.md` at
+   `TASK_DIR/previsualize-cinematography/`; compile manifests, Storyboard JSON,
+   traces, ledgers, companions, wrappers, and alternate representations are
+   forbidden. Route A must return missing or contradictory screenplay authority to
+   its owner, then convert accepted story-facing Shot rows into final one-task Shots
+   with motivated camera, layered blocking, selective ensemble control, and passed
+   cinematic reviews. Route A must also author one Location State Plan inside
+   `storyboard.md`. Every recurring location declares adjacent or nonadjacent
+   inheritance, its latest temporal state source, separate Location-owned
+   world/population evidence, persistent
+   anchors, and allowed changes. Intervening inserts or imagined Scenes do not
+   reset a physical set. Route A must make
    every overlapping `scene_ids` pair directly serial: `multimodal_reference` plus
    provider-last-frame soft reference image for settled cuts, or complete-predecessor
    `video_extension` for unfinished phases. Soft reference is not strict/API
    first-frame control, and matched-tail evidence is not a third same-Scene mode.
-5. Require that final Route A package, then execute `virtual-production`. It invokes
-   Seed Master Route B and persists its Segment Scripts/trace/ledgers. Before URL
-   materialization, compare every provider-token responsibility and owned
-   Storyboard requirement with the selected semantic row in `assets.json`. Only a
-   current Prompt/assets.json semantic compatibility PASS may enter an execution
-   plan. SHA values bind the decision to current Prompt/catalog data but never
-   substitute for the semantic comparison. Route B may clarify execution language
-   but may not reinvent Scene conflict, blocking, Shot focus, camera logic, or
-   continuity. A Prompt missing exact Shot translation or the fixed cinematic
-   direction firewall is blocked before provider submission. Before materialization
+5. Require the current `storyboard.md`, then execute `virtual-production`. It
+   invokes Seed Master Route B and persists one exact natural-language Prompt plus
+   one private execution plan per Segment. Seed Master freely authors the Prompt's
+   structure, Shot/beat representation, camera language, length, wording, and time
+   expressions. Python checks only non-empty text plus the private plan's provider
+   tokens before the first Shot, one exact population lock, and exact quoted
+   dialogue/speaker placement in the owning `Shot N:` section; it does not apply a
+   general creative-prose template. The separate private plan carries deterministic
+   transport authority.
+   Before URL materialization,
+   directly reject any provider token whose declared media kind or asset namespace
+   cannot resolve to the matching current row in `assets.json`. Do not create
+   compatibility packets, review drafts, rework JSON, or another hidden creative
+   authority. Route B
+   may clarify execution language but may not reinvent Scene conflict, blocking,
+   Shot focus, camera logic, or continuity. Before materialization
    or any provider call, virtual production must reject same-Scene parallel,
    strict-first-frame substitution, matched-tail substitution, missing direct
    predecessor dependency, or a mismatch between settled/unfinished phase and the
    selected one of the two serial contracts.
-6. If that gate emits
-   `.pending/virtual-production/asset-rework-requests/segment-NNN.json`, stop all
-   affected Seedance submissions and return to `direct-production-design`. Use the
-   required/catalog facts, conflict domains, and asset IDs to repair
-   `production-design-plan.json`, `assets.json`, or the Route B binding. Never bind
-   the normal/healthy `lion` row when the Prompt requires an injured, transformed,
-   or alternate-costume asset. If semantic asset inventory changes, regenerate
-   affected Route A and Route B artifacts. Media-byte equality is outside this
-   gate; a transport URL change requires plan rematerialization but not a semantic
-   FAIL when the selected `assets.json` declaration is unchanged.
+   Every Segment set in a Location, including video extension, must bind that
+   Location master in every Shot. Predecessor media is temporal evidence only and
+   cannot authorize the offscreen set or complete population. Route B must also
+   author one readable population lock whose embedded roster exactly matches the
+   Location authority and whose independent performers are explicitly permitted.
+   A performer or movable prop already carried by temporal evidence must not also
+   receive a standalone identity reference in the successor. Separate visual
+   references are reserved for genuinely new entrants or explicit transformation
+   target states and must be described as the same subject, preventing duplicate
+   instances. A continuity-authorized closed roster that is not visibly carried by
+   the selected temporal evidence is a returning entrant when it must reappear:
+   bind its roster reference, enumerate every unique member in the natural-language
+   Prompt, assign one first-visible event per member, and forbid any member from
+   being generated again after that reveal.
+   Provider references apply request-wide; Shot prose cannot deactivate one. When
+   an exiting roster and an entering roster require mutually exclusive authority,
+   make the completed exit a Generation Segment boundary. Bind only the exiting
+   roster before that boundary and only the entering roster in its dependent
+   successor.
+6. On a direct asset-resolution failure, stop the affected Seedance submission and
+   return to `direct-production-design`. Report the failure in command output only;
+   never create a substitute Prompt, asset, review packet, or rework artifact. Fix
+   the authoritative production design or the manually authored Route B binding,
+   then rerun from current sources.
+   For a nonadjacent location revisit, virtual production must wait for the named
+   location-state source review and bind current temporal evidence plus the
+   Location-master world/population authority, adding the latest human-approved
+   readable wide state when visible set changes require it.
+   Code may validate or extract an explicitly selected frame; it may not select or
+   invent continuity evidence.
 7. When a serial shooting-plan row requires observed predecessor evidence, use
    `seedance-video-review` on that exact provider attempt. After `NO_ISSUES`, let
    virtual production invoke Seed Master for the required observed successor
-   recompilation; correct any issue through its owning department.
+   recompilation; correct any issue through its owning department. `NO_ISSUES` may
+   include a semantically equivalent internal-cut shift or adjacent movable-prop
+   landing when the complete dramatic exchange, identities, fixed set, authorized
+   population, ownership, action completion, and safe ending remain valid. Never
+   regenerate solely for frame-exact timing or centimetre-level prop placement.
+   Instead, make the observed final action phase and actual prop position the
+   successor's temporal authority. Missing, duplicated, teleported, inaccessible,
+   story-changing, or causally mistimed state remains a blocking issue.
 8. Execute `finish-postproduction` after every current Segment has one valid
    audiovisual result and production record. Deliver clean and captioned masters,
    exact subtitle files, and the final delivery manifest.

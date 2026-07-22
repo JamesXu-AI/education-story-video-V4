@@ -16,9 +16,7 @@ from story_video.screenplay_contract import (  # noqa: E402
     DIALOGUE_WORDS_PER_SECOND,
     MINIMUM_ACTION_REACTION_SECONDS,
     fixed_screenplay_prompt,
-    validate_dialogue_occupancy,
 )
-from story_video.runtime_support import StoryVideoError  # noqa: E402
 
 
 class RoleAssetScopeTests(unittest.TestCase):
@@ -143,12 +141,14 @@ class RoleAssetScopeTests(unittest.TestCase):
         self.assertIn("BGM", generation_prompt)
         self.assertIn("Validator behavior is governed", generation_prompt)
         self.assertIn("present_at_open", generation_prompt)
-        self.assertIn("first visibility", generation_prompt)
+        self.assertIn("First visibility", generation_prompt)
         self.assertIn("landing result", generation_prompt)
         self.assertIn("speech gate", generation_prompt)
         self.assertIn("Understand the film before authoring tables", generation_prompt)
         self.assertIn("state_match", generation_prompt)
         self.assertIn("continuous_motion", generation_prompt)
+        self.assertIn("no timing notation is mandatory", generation_prompt)
+        self.assertIn("a fixed Shot count", " ".join(generation_prompt.split()))
         self.assertIn(
             f"dialogue_words / {DIALOGUE_WORDS_PER_SECOND}", generation_prompt
         )
@@ -156,15 +156,13 @@ class RoleAssetScopeTests(unittest.TestCase):
             f"dialogue_line_count * {DIALOGUE_TURN_ALLOWANCE_SECONDS}",
             generation_prompt,
         )
-        self.assertIn(
-            f"+ {MINIMUM_ACTION_REACTION_SECONDS}", generation_prompt
-        )
-        for shared_threshold in (
+        self.assertIn(f"+ {MINIMUM_ACTION_REACTION_SECONDS}", generation_prompt)
+        for removed_restriction in (
             "45% for `action_led`",
-            "60% for",
             "72% for `dialogue_led`",
+            "at most three per Scene Unit",
         ):
-            self.assertIn(shared_threshold, generation_prompt)
+            self.assertNotIn(removed_restriction, generation_prompt)
         for stale_clause in (
             "spec screenplay",
             "audio-timeline.json",
@@ -172,28 +170,6 @@ class RoleAssetScopeTests(unittest.TestCase):
             "not generators",
         ):
             self.assertNotIn(stale_clause, generation_prompt)
-
-    def test_dialogue_occupancy_uses_declared_workload_limit(self) -> None:
-        windows = [
-            {"block_type": "action", "start_seconds": 0.0, "end_seconds": 2.0},
-            {"block_type": "dialogue", "start_seconds": 2.0, "end_seconds": 8.5},
-            {"block_type": "action", "start_seconds": 8.5, "end_seconds": 10.0},
-        ]
-        occupancy, limit = validate_dialogue_occupancy(
-            segment_id="segment-001",
-            dramatic_workload="dialogue_led",
-            duration_seconds=10.0,
-            block_windows=windows,
-        )
-        self.assertAlmostEqual(occupancy, 0.65)
-        self.assertEqual(limit, 0.72)
-        with self.assertRaisesRegex(StoryVideoError, "exceeds the 60%"):
-            validate_dialogue_occupancy(
-                segment_id="segment-001",
-                dramatic_workload="mixed_dialogue_action",
-                duration_seconds=10.0,
-                block_windows=windows,
-            )
 
 if __name__ == "__main__":
     unittest.main()

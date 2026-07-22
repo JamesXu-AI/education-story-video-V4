@@ -28,9 +28,9 @@ if "story_video" in sys.modules:
 from route_b_handoff import load_route_b_handoff  # noqa: E402
 from story_video.seed_master_runtime import (  # noqa: E402
     load_execution_plan,
-    manifest_segment_rows,
     parse_segment_script,
     sha256_file,
+    storyboard_segment_rows,
 )
 from story_video.boundary_execution import (  # noqa: E402
     build_story_plan_boundaries,
@@ -160,11 +160,11 @@ def _validate_task_audio(task_dir: Path) -> dict[str, Any]:
 def discover_segments(task_dir: Path) -> list[SegmentRecord]:
     task_dir = task_dir.expanduser().resolve()
     _validate_task_audio(task_dir)
-    story_plans = _screenplay_story_plans(task_dir)
-    expected = [str(item["segment_id"]) for item in manifest_segment_rows(task_dir)]
+    story_plans, _ = _screenplay_story_plans(task_dir)
+    expected = [str(item["segment_id"]) for item in storyboard_segment_rows(task_dir)]
     if [item["segment_id"] for item in story_plans] != expected:
         raise TimelineError(
-            "screenplay.md Segment order differs from the native Storyboard compile manifest"
+            "screenplay.md Segment order differs from the current private Segment plans"
         )
     generation_state = _load_json(
         task_dir / "virtual-production" / "generation-state.json",
@@ -234,16 +234,11 @@ def discover_segments(task_dir: Path) -> list[SegmentRecord]:
             / f"{segment_name}.json"
         )
         execution_plan = load_execution_plan(task_dir, segment_name)
-        compatibility = execution_plan.get("asset_compatibility")
         if (
             production_record.get("seed_master_script_sha256")
             != parsed_script["script_sha256"]
             or production_record.get("seedance_execution_plan_sha256")
             != sha256_file(execution_plan_path)
-            or not isinstance(compatibility, dict)
-            or compatibility.get("overall_verdict") != "PASS"
-            or production_record.get("asset_compatibility_review_sha256")
-            != compatibility.get("review_sha256")
             or production_record.get("operation")
             != parsed_script["metadata"]["operation"]
         ):

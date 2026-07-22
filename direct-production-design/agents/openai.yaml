@@ -1,4 +1,4 @@
 interface:
   display_name: "Direct Production Design"
-  short_description: "Build exact-state assets and repair real-media mismatches"
-  default_prompt: "Use $direct-production-design to build the current visual asset system, including exact appearance and injury states, and consume any virtual-production real-asset incompatibility request by repairing the semantic plan or forcibly regenerating the affected media instead of relabeling a wrong image."
+  short_description: "Design exact assets and fully dressed Locations"
+  default_prompt: "Use $direct-production-design. Understand the complete screenplay, author each Location's fixed set, and classify every on-screen role as either a stable embedded background NPC or an independent performer. Every speaking or story-active role must remain independent. Author the exact structured plan and Prompts; let Python validate and execute without classifying, filling, or appending content."

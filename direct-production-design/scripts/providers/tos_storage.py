@@ -295,6 +295,22 @@ def tos_public_url(key: str) -> str:
     return urllib.parse.urlunsplit(("https", host, "/" + encoded_key, "", ""))
 
 
+def production_asset_key(asset_kind: str, asset_id: str, filename: str) -> str:
+    """Return one stable project-owned object key for a generated asset."""
+
+    parts = [asset_kind, asset_id, filename]
+    if any(
+        not isinstance(part, str)
+        or not part.strip()
+        or "/" in part
+        or ".." in pathlib.PurePosixPath(part).parts
+        for part in parts
+    ):
+        raise SeedMediaError("Production asset key components must be safe path names")
+    prefix = tos_settings()["prefix"].strip("/")
+    return "/".join([prefix, "production-assets", *parts])
+
+
 def _is_tos_http_url(value: str) -> bool:
     parsed = urllib.parse.urlsplit(value)
     hostname = (parsed.hostname or "").casefold()

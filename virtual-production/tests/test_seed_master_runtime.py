@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from typing import Optional
 
 
 SCRIPT_ROOT = Path(__file__).resolve().parents[1] / "scripts"
@@ -13,469 +14,294 @@ if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
 from story_video.seed_master_runtime import (  # noqa: E402
-    ACCEPTANCE_FIREWALL,
-    PRESENTATION_FIREWALL,
     SeedMasterRuntimeError,
-    build_execution_plan,
-    manifest_segment_rows,
+    _validate_continuity_bindings,
     parse_segment_script,
+    storyboard_segment_rows,
 )
 
 
-def _script(*, serial: bool = False, soft_first_frame: bool = False) -> str:
-    if soft_first_frame:
-        status = "observed_adapted"
-        schedule = "serial_after_predecessor_review"
-        wave = 1
-        dependencies = "[segment-001]"
-        review = "true"
-        evidence = "approved_provider_last_frame"
-        recompile = "true"
-        editorial = "none"
-        video_scope = "none"
-        video_audio = "none"
-        bindings = (
-            "- B01 | @Image1 | provider_role=reference_image | element=continuity.selected_boundary_visual_state | shot_scope=Shot 1 | authority=soft predecessor last-frame continuity only | forbidden=strict first-frame pixels or replay"
-        )
-        binding_ids = "[B01]"
-        binding_count = 1
-    elif serial:
-        status = "observed_adapted"
-        schedule = "serial_after_predecessor_review"
-        wave = 1
-        dependencies = "[segment-001]"
-        review = "true"
-        evidence = "approved_final_2s_silent_plus_provider_last_frame"
-        recompile = "true"
-        editorial = "matched_cut"
-        video_scope = "exact_final_2s_real_motion"
-        video_audio = "stripped_for_matched_cut"
-        bindings = (
-            "- B01 | @Image1 | provider_role=reference_image | element=continuity.selected_boundary_visual_state | shot_scope=Shot 1 | authority=provider last frame only | forbidden=new action\n"
-            "- B02 | @Video1 | provider_role=reference_video | element=continuity.selected_boundary_motion | shot_scope=Shot 1 | authority=terminal real motion only | forbidden=audio or replay"
-        )
-        binding_ids = "[B01, B02]"
-        binding_count = 2
-    else:
-        status = "planned"
-        schedule = "parallel"
-        wave = 0
-        dependencies = "[]"
-        review = "false"
-        evidence = "none"
-        recompile = "false"
-        editorial = "none"
-        video_scope = "none"
-        video_audio = "none"
-        bindings = (
-            "- B01 | @Image1 | provider_role=reference_image | element=location-001.architecture_material_light | shot_scope=Shot 1 | authority=set only | forbidden=people\n"
-            "- B02 | @Audio1 | provider_role=reference_audio | element=hero.voice_timbre | shot_scope=Shot 1 | authority=timbre only | forbidden=source words"
-        )
-        binding_ids = "[B01, B02]"
-        binding_count = 2
-    return f"""# segment-002 — Test
+def _plan(segment_id: str = "segment-001", *, scene: str = "forest clearing") -> dict:
+    return {
+        "contract": "seedance-natural-language-plan-v1",
+        "segment_id": segment_id,
+        "source_storyboard_sha256": "a" * 64,
+        "scene_ids": [scene],
+        "target_duration": 8,
+        "shot_count": 2,
+        "operation": "multimodal_reference",
+        "shooting_plan_status": "planned",
+        "schedule_mode": "parallel",
+        "planned_wave": 0,
+        "depends_on_segment_ids": [],
+        "dependency_reason": "independent opening",
+        "predecessor_review_required": False,
+        "required_predecessor_evidence": "none",
+        "successor_recompile_required": False,
+        "fallback_operation_and_story_cost": "none",
+        "seam_class": "authored_discontinuity",
+        "seam_resynthesis_allowed": True,
+        "seam_story_reason": "new scene",
+        "editorial_intent": "open on calm attention, end on the listener response",
+        "reference_video_scope": "none",
+        "reference_video_audio": "none",
+        "camera_ensemble_color_resynthesis_allowed": True,
+        "continuity": {
+            "location_state_chain": scene,
+            "relationship": "independent",
+            "state_source_segment_id": "none",
+            "world_binding_ids": ["B01"],
+            "temporal_binding_ids": [],
+            "embedded_npc_asset_ids": [],
+            "authorized_independent_performer_asset_ids": ["grandfather", "uthman"],
+            "population_lock_en": "Only Grandfather and Uthman may appear; introduce no other person, animal, silhouette, reflection, or distant bystander.",
+        },
+        "bindings": [
+            {
+                "binding_id": "B01",
+                "provider_token": "@Image1",
+                "provider_role": "reference_image",
+                "asset_namespace": "forest-clearing",
+                "readable_subject": "forest clearing",
+                "purpose": "architecture and daylight only",
+                "shot_scope": [1, 2],
+                "forbidden_inheritance": "people, text, or camera angle",
+            }
+        ],
+        "dialogue_cues": [
+            {
+                "line_id": "line-1",
+                "speaker_entity_id": "grandfather",
+                "speaker_name": "Grandfather",
+                "exact_text": "Then listen closely.",
+                "shot_number": 2,
+                "start_seconds": 4.5,
+                "end_seconds": 6.0,
+            }
+        ],
+        "editable_hold_seconds": 1.0,
+        "final_visible_state": "Uthman sits still and meets Grandfather's eyes.",
+        "final_sound_state": "The final word fades into quiet room tone.",
+    }
 
-```yaml
-scene_ids: [scene-001]
-segment_id: segment-002
-source_storyboard_revision: approved-r1
-source_storyboard_sha256: {'a' * 64}
-source_manifest_sha256: {'b' * 64}
-storyboard_line_ids: []
-storyboard_beat_ids: [BEAT-01A]
-storyboard_shot_ids: [SH-001]
-storyboard_requirement_ids: [REQ-001]
-shooting_plan_status: {status}
-schedule_mode: {schedule}
-planned_wave: {wave}
-depends_on_segment_ids: {dependencies}
-dependency_reason: exact authored seam requirement
-predecessor_review_required: {review}
-required_predecessor_evidence: {evidence}
-successor_recompile_required: {recompile}
-fallback_operation_and_story_cost: motivated cut with reduced motion continuity
-operation: multimodal_reference
-seam_class: motivated_coverage_cut
-seam_resynthesis_allowed: true
-seam_story_reason: transfer attention on the authored consequence
-editorial_intent: {editorial}
-reference_video_scope: {video_scope}
-reference_video_audio: {video_audio}
-camera_ensemble_color_resynthesis_allowed: true
-target_duration: 8s
-internal_shot_count: 1
-internal_shot_order: [Shot 1]
-reference_binding_count: {binding_count}
-reference_binding_ids: {binding_ids}
-continuity_status: planned
-```
 
-## Part 1 — Overall setup
+def _prompt() -> str:
+    return """Operation: Multimodal reference, 8 seconds, 16:9, 1080p, native audio on.
 
-### 1.0 Storyboard source coverage
+Use @Image1 only for the forest clearing's architecture and daylight, not for characters, text, or camera angle.
 
-- requirement_contract: {{"requirement_id":"REQ-001","source_text_sha256":"{'3' * 64}","target_part":"Part 1","target_shot_ids":[],"implementation":"Preserve the consequence."}}
+Only Grandfather and Uthman may appear; introduce no other person, animal, silhouette, reflection, or distant bystander.
 
-### 1.1 Generation contract
+Scene: A warm forest clearing at Eid, with soft daylight through broad leaves and an open path between the crowd and a root throne.
 
-Preserve the consequence.
+Shot 1: The locked camera frames Uthman seated beside Grandfather. Uthman closes the book on his lap, leans across the low table, and stops with both hands on the cover while Grandfather lowers his cup and meets his eyes. Quiet room tone and a faint clock tick remain audible.
 
-{PRESENTATION_FIREWALL}
+Shot 2: Cut closer as the camera slowly pushes toward Grandfather. He sets the cup on its saucer, waits until Uthman sits upright, looks directly at him, and says in a warm deliberate voice, \"Then listen closely.\" Uthman keeps his mouth closed, stills his hands, and holds Grandfather's gaze as the porcelain click fades.
 
-### 1.2 Task-local reference manifest
+Style and image quality: Warm low-contrast evening light, tactile natural materials, stable motion, and crisp eyes and hands at 1080p.
 
-```text
-{bindings}
-```
-
-### 1.3 Shot-reference matrix
-
-- Shot 1 | active=B01=@Image1>asset,B02=@Audio1>asset | inactive=none
-
-### 1.4 Continuity, space, performance, and sound contract
-
-Maintain the authored state and native audio.
-
-### 1.5 [CINEMATIC DIRECTION]
-
-- selected_cinematic_direction: {{"shot_ids":["SH-001"],"rules":["one narrative focus with motivated camera placement"],"scene_specific_implementation":"SH-001 holds on the affected listener's action from inside the scene and rejects frontal cast presentation."}}
-
-## Part 2 — Ordered internal shots and performance
-
-### Shot 1 — shot_id=SH-001 | location_id=LOC-001 | camera_id=CAM-001 | panel_id=PNL-001
-
-#### Active References
-
-- bindings repeated exactly
-
-#### Inactive/Forbidden References
-
-- none
-
-#### Dramatic Action and Spatial Trace
-
-- action_contract: source_beat=BEAT-01A; subject=hero; dramatic_cause=truth; objective_tactic=hold; body_part=eyes; action=active stillness; range=small; speed=still; force=controlled; continuity=held; audience_effect=understanding; landing=resolved
-- facing_contract: source_beat=BEAT-01A; required=false; dramatic_function=orientation is irrelevant; start=not_applicable; relation=not_applicable; path=not_applicable; end=not_applicable; audience_effect=attention stays on the eyes
-
-#### Cinematic Staging Contract
-
-- cinematic_shot_contract: {{"shot_id":"SH-001","staging_implementation":"SH-001 frames only the listener's tightening hand behind a foreground edge while the speaker remains off-screen and the locked camera makes the power shift readable."}}
-
-#### Storyboard Line Contracts
-
-- none
-
-#### Direction
-
-SH-001 frames only the listener's tightening hand behind a foreground edge while the speaker remains off-screen and the locked camera makes the power shift readable. Hold the authored state with native synchronized sound, then settle.
-
-## Part 3 — Continuity, audio, quality, and duration acceptance
-
-{ACCEPTANCE_FIREWALL}
+Constraints and end state: Subtitle-free, no logo, no watermark; preserve both identities and end with Uthman settled and attentive.
 """
 
 
-def _write_predecessor_attempt(root: Path) -> None:
-    source = root / ".pending/virtual-production/generation-segments/segment-001"
-    source.mkdir(parents=True)
-    (source / "video.mp4").write_bytes(b"video")
-    (source / "last-frame.png").write_bytes(b"frame")
-    source_script = root / ".pending/virtual-production/seedance-segment-scripts/segment-001.md"
-    source_script.parent.mkdir(parents=True)
-    source_script.write_text("source Script", encoding="utf-8")
-    source_plan = root / ".pending/virtual-production/seedance-execution-plans/segment-001.json"
-    source_plan.parent.mkdir(parents=True)
-    source_plan.write_text("{}", encoding="utf-8")
-    script_sha = hashlib.sha256(source_script.read_bytes()).hexdigest()
-    plan_sha = hashlib.sha256(source_plan.read_bytes()).hexdigest()
-    for filename, value in (
-        (
-            "production-record.json",
-            {
-                "status": "GENERATED",
-                "segment_id": "segment-001",
-                "provider_attempt_id": "segment-001__attempt-0002",
-                "seed_master_script_sha256": script_sha,
-                "seedance_execution_plan_sha256": plan_sha,
-            },
-        ),
-        ("artifacts.json", {"provider_attempt_id": "segment-001__attempt-0002"}),
-    ):
-        (source / filename).write_text(json.dumps(value), encoding="utf-8")
+def _write_fixture(
+    root: Path, prompt: Optional[str] = None, plan: Optional[dict] = None
+) -> Path:
+    script = root / "segment-001.md"
+    script.write_text(_prompt() if prompt is None else prompt, encoding="utf-8")
+    script.with_suffix(".plan.json").write_text(
+        json.dumps(plan or _plan()), encoding="utf-8"
+    )
+    return script
 
 
-class SeedMasterRuntimeTests(unittest.TestCase):
-    def test_runtime_rejects_prompt_without_cinematic_direction(self) -> None:
+class NaturalPromptRuntimeTests(unittest.TestCase):
+    def test_accepts_natural_language_prompt_without_parsing_its_form(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "segment-002.md"
-            path.write_text(
-                _script().replace("### 1.5 [CINEMATIC DIRECTION]", "### 1.5 Removed"),
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(SeedMasterRuntimeError, "cinematic direction"):
-                parse_segment_script(path)
+            parsed = parse_segment_script(_write_fixture(Path(directory)))
+        self.assertEqual(parsed["segment_id"], "segment-001")
+        self.assertNotIn("shots", parsed)
+        self.assertNotIn("binding_id", parsed["prompt"])
+        self.assertNotIn("{", parsed["prompt"])
 
-    def test_parallel_script_resolves_asset_catalog_urls(self) -> None:
+    def test_prompt_form_remains_free_after_binding_checks(self) -> None:
+        population_lock = _plan()["continuity"]["population_lock_en"]
+        prompt = (
+            "A free-form Seedance request with no prescribed operation or scene headings.\n\n"
+            "Let @Image1 supply the approved forest-clearing reference.\n"
+            f"{population_lock}\n\n"
+            "Shot 2: From 0–3s the camera pans, tilts, cranes, and pushes toward CHR-001; "
+            'the prose may contain {"author_choice": true}, internal terminology, '
+            'or any other wording the author deliberately chooses. Grandfather says, '
+            '"Then listen closely."\n\n'
+            + "Unrestricted descriptive wording. " * 1100
+        )
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            path = root / "segment-002.md"
-            path.write_text(_script(), encoding="utf-8")
-            parsed = parse_segment_script(path)
-            self.assertNotIn("cinematic_shot_contract", parsed["prompt"])
-            self.assertNotIn("requirement_contract", parsed["prompt"])
-            self.assertIn(
-                "SH-001 frames only the listener's tightening hand",
-                parsed["prompt"],
-            )
-            plan = build_execution_plan(
-                task_dir=root,
-                parsed=parsed,
-                catalog={
-                    "assets": {
-                        "location-001": {
-                            "type": "location_master",
-                            "visual": {"uri": "https://example.test/location.png"},
-                        },
-                        "hero": {
-                            "type": "character",
-                            "voice": {
-                                "reference": {"uri": "https://example.test/hero.wav"}
-                            },
-                        },
-                    }
-                },
-                capability_profile={
-                    "contract": "seedance-capability-profile",
-                    "profile_status": "VERIFIED",
-                    "model_id": "seedance-test",
-                    "provider_capabilities": {
-                        "maximum_reference_images": 9,
-                        "maximum_reference_videos": 3,
-                        "maximum_reference_audios": 3,
-                    },
-                },
-                task={"input": {"resolution": "1080p", "aspect_ratio": "16:9"}},
-            )
-        self.assertEqual(
-            [item["provider_token"] for item in plan["media_bindings"]],
-            ["@Image1", "@Audio1"],
-        )
-        self.assertEqual(
-            plan["media_bindings"][0]["uri"],
-            "https://example.test/location.png",
-        )
+            parsed = parse_segment_script(_write_fixture(Path(directory), prompt))
+        self.assertEqual(parsed["prompt"], prompt.strip())
 
-    def test_soft_first_frame_script_is_multimodal_not_strict(self) -> None:
+    def test_rejects_provider_token_after_the_first_shot_section(self) -> None:
+        bad = _prompt().replace(
+            "Use @Image1 only for the forest clearing's architecture and daylight, not for characters, text, or camera angle.",
+            "Use the approved forest clearing only for architecture and daylight.",
+        ).replace(
+            "Shot 1:",
+            "Shot 1: Use @Image1 only for the approved forest clearing.",
+            1,
+        )
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "segment-002.md"
-            path.write_text(_script(soft_first_frame=True), encoding="utf-8")
-            parsed = parse_segment_script(path)
+            with self.assertRaisesRegex(SeedMasterRuntimeError, "before its first Shot"):
+                parse_segment_script(_write_fixture(Path(directory), bad))
 
-        self.assertEqual(parsed["metadata"]["operation"], "multimodal_reference")
-        self.assertEqual(
-            parsed["metadata"]["required_predecessor_evidence"],
-            "approved_provider_last_frame",
+    def test_rejects_provider_token_set_that_differs_from_private_plan(self) -> None:
+        bad = _prompt().replace("@Image1", "@Image2")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(SeedMasterRuntimeError, "tokens differ"):
+                parse_segment_script(_write_fixture(Path(directory), bad))
+
+    def test_rejects_dialogue_placed_in_the_wrong_shot(self) -> None:
+        bad = _prompt().replace('"Then listen closely."', '"Listen."', 1).replace(
+            "Quiet room tone and a faint clock tick remain audible.",
+            'Grandfather says, "Then listen closely." Quiet room tone remains audible.',
+            1,
         )
-        self.assertEqual(parsed["bindings"][0]["provider_role"], "reference_image")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(SeedMasterRuntimeError, "inside Shot 2"):
+                parse_segment_script(_write_fixture(Path(directory), bad))
 
-    def test_soft_first_frame_execution_plan_binds_only_reference_image(self) -> None:
+    def test_rejects_missing_population_lock(self) -> None:
+        population_lock = _plan()["continuity"]["population_lock_en"]
+        bad = _prompt().replace(population_lock + "\n", "")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(SeedMasterRuntimeError, "population lock exactly once"):
+                parse_segment_script(_write_fixture(Path(directory), bad))
+
+    def test_rejects_only_an_empty_prompt_at_the_text_layer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(SeedMasterRuntimeError, "must not be empty"):
+                parse_segment_script(_write_fixture(Path(directory), " \n\t"))
+
+    def test_private_plans_replace_compile_manifest_as_segment_authority(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            path = root / "segment-002.md"
-            path.write_text(_script(soft_first_frame=True), encoding="utf-8")
-            _write_predecessor_attempt(root)
-            plan = build_execution_plan(
-                task_dir=root,
-                parsed=parse_segment_script(path),
-                catalog={"assets": {}},
-                capability_profile={
-                    "contract": "seedance-capability-profile",
-                    "profile_status": "VERIFIED",
-                    "model_id": "seedance-test",
-                    "provider_capabilities": {
-                        "maximum_reference_images": 9,
-                        "maximum_reference_videos": 3,
-                        "maximum_reference_audios": 3,
-                    },
-                },
-                task={"input": {"resolution": "1080p", "aspect_ratio": "16:9"}},
-            )
+            plan_root = root / ".pending/virtual-production/seedance-segment-plans"
+            plan_root.mkdir(parents=True)
+            first = _plan()
+            second = _plan("segment-002", scene="family room")
+            for row in (first, second):
+                (plan_root / f"{row['segment_id']}.json").write_text(
+                    json.dumps(row), encoding="utf-8"
+                )
+            rows = storyboard_segment_rows(root)
+        self.assertEqual([row["segment_id"] for row in rows], ["segment-001", "segment-002"])
 
-        self.assertEqual(plan["shooting_plan"]["operation"], "multimodal_reference")
-        self.assertEqual(plan["media_counts"]["reference_image"], 1)
-        self.assertEqual(plan["media_counts"]["reference_video"], 0)
-        self.assertEqual(plan["media_bindings"][0]["source_kind"], "provider_last_frame")
-        self.assertEqual(plan["media_bindings"][0]["provider_role"], "reference_image")
-        self.assertNotIn("first_frame", plan["seedance_parameters"])
-
-    def test_dependent_script_locks_exact_predecessor_attempt(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            path = root / "segment-002.md"
-            path.write_text(_script(serial=True), encoding="utf-8")
-            source = root / ".pending/virtual-production/generation-segments/segment-001"
-            source.mkdir(parents=True)
-            (source / "video.mp4").write_bytes(b"video")
-            (source / "last-frame.png").write_bytes(b"frame")
-            source_script = root / ".pending/virtual-production/seedance-segment-scripts/segment-001.md"
-            source_script.parent.mkdir(parents=True)
-            source_script.write_text("source Script", encoding="utf-8")
-            source_plan = root / ".pending/virtual-production/seedance-execution-plans/segment-001.json"
-            source_plan.parent.mkdir(parents=True)
-            source_plan.write_text("{}", encoding="utf-8")
-            script_sha = hashlib.sha256(source_script.read_bytes()).hexdigest()
-            plan_sha = hashlib.sha256(source_plan.read_bytes()).hexdigest()
-            for filename, value in (
-                (
-                    "production-record.json",
-                    {
-                        "status": "GENERATED",
-                        "segment_id": "segment-001",
-                        "provider_attempt_id": "segment-001__attempt-0002",
-                        "seed_master_script_sha256": script_sha,
-                        "seedance_execution_plan_sha256": plan_sha,
-                    },
-                ),
-                (
-                    "artifacts.json",
-                    {"provider_attempt_id": "segment-001__attempt-0002"},
-                ),
-            ):
-                (source / filename).write_text(json.dumps(value), encoding="utf-8")
-            parsed = parse_segment_script(path)
-            plan = build_execution_plan(
-                task_dir=root,
-                parsed=parsed,
-                catalog={"assets": {}},
-                capability_profile={
-                    "contract": "seedance-capability-profile",
-                    "profile_status": "VERIFIED",
-                    "model_id": "seedance-test",
-                    "provider_capabilities": {
-                        "maximum_reference_images": 9,
-                        "maximum_reference_videos": 3,
-                        "maximum_reference_audios": 3,
-                    },
-                },
-                task={"input": {"resolution": "1080p", "aspect_ratio": "16:9"}},
-            )
-        self.assertEqual(
-            {item["source_kind"] for item in plan["media_bindings"]},
-            {"provider_last_frame", "final_2s_silent_video"},
-        )
-        self.assertEqual(
-            {item["source_provider_attempt_id"] for item in plan["media_bindings"]},
-            {"segment-001__attempt-0002"},
-        )
-
-    def _write_manifest(self, root: Path, rows: list[dict[str, object]]) -> None:
-        path = root / "previsualize-cinematography/storyboard-compile-manifest.json"
-        path.parent.mkdir(parents=True)
-        path.write_text(json.dumps({"segments": rows}), encoding="utf-8")
-
-    def _manifest_rows(self, mode: str) -> list[dict[str, object]]:
-        opening = {
+    def test_rejects_serial_temporal_evidence_without_location_world_binding(self) -> None:
+        plan = _plan()
+        parsed = {
             "segment_id": "segment-001",
-            "scene_ids": ["scene-001"],
-            "planned_wave": 0,
+            "metadata": plan,
+            "bindings": [
+                {
+                    "binding_id": "B01",
+                    "provider_token": "@Image1",
+                    "provider_role": "reference_image",
+                    "asset_namespace": "continuity",
+                    "shot_scope": ["Shot 1", "Shot 2"],
+                }
+            ],
         }
-        successor = {
+        media = [
+            {
+                "source_kind": "provider_last_frame",
+                "binding_ids": ["B01"],
+            }
+        ]
+        catalog = {
+            "assets": {
+                "forest-clearing": {
+                    "type": "location_master",
+                    "embedded_npc_asset_ids": [],
+                    "independent_performer_asset_ids": ["grandfather", "uthman"],
+                }
+            }
+        }
+        with self.assertRaisesRegex(SeedMasterRuntimeError, "Location master"):
+            _validate_continuity_bindings(
+                parsed=parsed, catalog=catalog, media_bindings=media
+            )
+
+    def test_accepts_separate_world_and_temporal_authorities(self) -> None:
+        plan = _plan()
+        plan["shot_count"] = 2
+        plan["continuity"] = {
+            **plan["continuity"],
+            "relationship": "adjacent_continuation",
+            "state_source_segment_id": "segment-001",
+            "world_binding_ids": ["B01"],
+            "temporal_binding_ids": ["B02"],
+        }
+        parsed = {
             "segment_id": "segment-002",
-            "scene_ids": ["scene-001"],
-            "parallelization_verdict": "serial_required_for_effect",
-            "schedule_mode": "serial_after_predecessor_review",
-            "planned_wave": 1,
-            "depends_on_segment_ids": ["segment-001"],
-            "boundary_semantic_verdict": "serial_inheritance_required",
-            "predecessor_review_required": True,
-            "successor_recompile_required": True,
-            "editorial_intent": "none",
+            "metadata": plan,
+            "bindings": [
+                {
+                    "binding_id": "B01",
+                    "provider_token": "@Image1",
+                    "provider_role": "reference_image",
+                    "asset_namespace": "forest-clearing",
+                    "shot_scope": ["Shot 1", "Shot 2"],
+                },
+                {
+                    "binding_id": "B02",
+                    "provider_token": "@Video1",
+                    "provider_role": "reference_video",
+                    "asset_namespace": "continuity",
+                    "shot_scope": ["Shot 1", "Shot 2"],
+                },
+            ],
         }
-        if mode == "soft_first_frame":
-            successor.update(
-                {
-                    "operation": "multimodal_reference",
-                    "required_predecessor_evidence": "approved_provider_last_frame",
-                    "reference_video_scope": "none",
-                    "reference_video_audio": "none",
-                    "seam_class": "motivated_coverage_cut",
-                    "seam_resynthesis_allowed": "true",
-                    "camera_ensemble_color_resynthesis_allowed": "true",
+        catalog = {
+            "assets": {
+                "forest-clearing": {
+                    "type": "location_master",
+                    "embedded_npc_asset_ids": [],
+                    "independent_performer_asset_ids": ["grandfather", "uthman"],
                 }
-            )
-        elif mode == "predecessor_video":
-            successor.update(
-                {
-                    "operation": "video_extension",
-                    "required_predecessor_evidence": "approved_complete_predecessor",
-                    "reference_video_scope": "full_predecessor_for_extension",
-                    "reference_video_audio": "preserved_for_extension",
-                    "seam_class": "continuous_extension",
-                    "seam_resynthesis_allowed": "false",
-                    "camera_ensemble_color_resynthesis_allowed": "false",
-                }
-            )
-        elif mode == "parallel":
-            successor.update(
-                {
-                    "operation": "multimodal_reference",
-                    "required_predecessor_evidence": "none",
-                    "reference_video_scope": "none",
-                    "reference_video_audio": "none",
-                    "seam_class": "motivated_coverage_cut",
-                    "seam_resynthesis_allowed": "true",
-                    "camera_ensemble_color_resynthesis_allowed": "true",
-                    "parallelization_verdict": "effect_equivalent_or_better",
-                    "schedule_mode": "parallel",
-                    "planned_wave": 0,
-                    "depends_on_segment_ids": [],
-                    "boundary_semantic_verdict": "independent_effect_equivalent",
-                    "predecessor_review_required": False,
-                    "successor_recompile_required": False,
-                }
-            )
-        else:
-            raise AssertionError(f"unknown mode {mode}")
-        return [opening, successor]
+            }
+        }
+        media = [
+            {"source_kind": "asset_catalog", "binding_ids": ["B01"]},
+            {
+                "source_kind": "complete_predecessor_video",
+                "binding_ids": ["B02"],
+            },
+        ]
+        _validate_continuity_bindings(
+            parsed=parsed, catalog=catalog, media_bindings=media
+        )
 
-    def test_manifest_allows_same_scene_soft_first_frame_serial(self) -> None:
+    def test_rejects_nonadjacent_revisit_with_wrong_state_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self._write_manifest(root, self._manifest_rows("soft_first_frame"))
-            rows = manifest_segment_rows(root)
-        self.assertEqual(rows[1]["operation"], "multimodal_reference")
-
-    def test_manifest_allows_same_scene_predecessor_video_serial(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self._write_manifest(root, self._manifest_rows("predecessor_video"))
-            rows = manifest_segment_rows(root)
-        self.assertEqual(rows[1]["operation"], "video_extension")
-
-    def test_manifest_rejects_same_scene_parallel_before_provider_work(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self._write_manifest(root, self._manifest_rows("parallel"))
-            with self.assertRaisesRegex(SeedMasterRuntimeError, "must directly depend"):
-                manifest_segment_rows(root)
-
-    def test_manifest_allows_parallel_after_scene_change(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            rows = self._manifest_rows("parallel")
-            rows[1]["scene_ids"] = ["scene-002"]
-            self._write_manifest(root, rows)
-            loaded = manifest_segment_rows(root)
-        self.assertEqual(loaded[1]["schedule_mode"], "parallel")
-
-    def test_manifest_rejects_strict_first_frame_as_soft_reference(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            rows = self._manifest_rows("soft_first_frame")
-            rows[1]["operation"] = "strict_first_frame"
-            self._write_manifest(root, rows)
-            with self.assertRaisesRegex(SeedMasterRuntimeError, "exactly one serial mode"):
-                manifest_segment_rows(root)
+            plan_root = root / ".pending/virtual-production/seedance-segment-plans"
+            plan_root.mkdir(parents=True)
+            first = _plan("segment-001", scene="room")
+            middle = _plan("segment-002", scene="forest")
+            revisit = _plan("segment-003", scene="room")
+            revisit["continuity"] = {
+                **revisit["continuity"],
+                "relationship": "nonadjacent_revisit",
+                "state_source_segment_id": "segment-002",
+                "temporal_binding_ids": ["B01"],
+                "world_binding_ids": ["B01"],
+            }
+            revisit["depends_on_segment_ids"] = ["segment-002"]
+            for row in (first, middle, revisit):
+                (plan_root / f"{row['segment_id']}.json").write_text(
+                    json.dumps(row), encoding="utf-8"
+                )
+            with self.assertRaisesRegex(SeedMasterRuntimeError, "latest state"):
+                storyboard_segment_rows(root)
 
 
 if __name__ == "__main__":

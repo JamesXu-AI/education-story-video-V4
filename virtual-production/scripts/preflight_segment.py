@@ -76,9 +76,7 @@ def preflight_segment(
         "reference_image_count": media_counts["reference_image"],
         "reference_video_count": media_counts["reference_video"],
         "reference_audio_count": media_counts["reference_audio"],
-        "prompt_real_asset_compatibility": plan["asset_compatibility"][
-            "overall_verdict"
-        ],
+        "media_bindings_resolved": True,
         "generate_audio": True,
         "return_last_frame": True,
     }

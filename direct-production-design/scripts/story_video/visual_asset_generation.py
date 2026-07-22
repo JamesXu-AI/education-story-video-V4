@@ -10,12 +10,11 @@ from urllib.parse import urlsplit, urlunsplit
 import uuid
 
 from story_video.asset_support import StoryVideoError
-from story_video.visual_style_contract import (
-    NEGATIVE_PROMPT_LOCKS,
-    POSITIVE_LOOK_LOCKS,
-    VISUAL_STYLE_PROFILE,
-    contains_prohibited_style_shortcut,
+from story_video.production_design_plan import (
+    ProductionDesignPlanError,
+    validate_generation_prompt_text,
 )
+from story_video.visual_style_contract import VISUAL_STYLE_PROFILE
 from providers import seedream
 
 
@@ -75,7 +74,7 @@ def load_visual_prompt(prompt_file: Path) -> tuple[str, Path]:
     return _require_text(prompt, "prompt_file content"), source
 
 
-def compile_style_locked_prompt(
+def validate_provider_prompt(
     task_root: Path, *, asset_kind: str, asset_prompt: str
 ) -> str:
     task_path = task_root / "task.json"
@@ -93,21 +92,10 @@ def compile_style_locked_prompt(
             "task.json visual_style_profile must be soft_cute_3d_healing_animation."
         )
     brief = _require_text(asset_prompt, "asset-specific prompt")
-    if contains_prohibited_style_shortcut(brief):
-        raise VisualAssetGenerationError(
-            "Asset prompt contains a prohibited studio, renderer, or IP style shortcut."
-        )
-    return (
-        "VISUAL STYLE AUTHORITY — Original Soft & Cute 3D Healing Animation.\n"
-        + "\n".join(POSITIVE_LOOK_LOCKS)
-        + "\nNEGATIVE CONSTRAINTS\n"
-        + "\n".join(NEGATIVE_PROMPT_LOCKS)
-        + "\n\n"
-        f"ASSET TYPE — {asset_kind}.\n"
-        "ASSET-SPECIFIC AUTHORITY — Preserve every factual and design lock below "
-        "without inventing story facts, camera decisions, or cultural symbols.\n"
-        f"{brief}"
-    )
+    try:
+        return validate_generation_prompt_text(brief, asset_type=asset_kind)
+    except ProductionDesignPlanError as exc:
+        raise VisualAssetGenerationError(str(exc)) from exc
 
 
 def _reference_values(values: Iterable[str] | None) -> list[str]:
@@ -294,12 +282,12 @@ def generate_visual_asset(
     if not prompt_input.is_absolute():
         prompt_input = root / prompt_input
     prompt, prompt_source = load_visual_prompt(prompt_input)
-    compiled_prompt = compile_style_locked_prompt(
+    provider_prompt = validate_provider_prompt(
         root, asset_kind=normalized_kind, asset_prompt=prompt
     )
     references, reference_plan = resolve_ordered_references(root, reference_images)
     provider_request = build_provider_request(
-        prompt=compiled_prompt, reference_images=references, size=size
+        prompt=provider_prompt, reference_images=references, size=size
     )
     if not dry_run and (
         isinstance(timeout, bool) or not isinstance(timeout, int) or timeout < 1
@@ -311,7 +299,7 @@ def generate_visual_asset(
     prompt_path = final_path.parent / f"{stem}.prompt.txt"
     request_path = final_path.parent / f"{stem}.request.json"
     response_path = final_path.parent / f"{stem}.response.json"
-    _write_text_atomic(prompt_path, compiled_prompt + "\n")
+    _write_text_atomic(prompt_path, provider_prompt)
     _write_json_atomic(
         request_path,
         {
@@ -348,7 +336,6 @@ def generate_visual_asset(
             "Seedream visual asset response must be a JSON object."
         )
     source_download_url = _single_output_url(response)
-    source_url = seedream.core.persistent_tos_url(source_download_url)
     temporary = final_path.with_name(f".{final_path.name}.download")
     temporary.unlink(missing_ok=True)
     try:
@@ -369,6 +356,13 @@ def generate_visual_asset(
         raise VisualAssetGenerationError(
             f"Failed to download Seedream visual asset: {exc}"
         ) from exc
+    stored = seedream.core.tos_upload_path(
+        final_path,
+        key=seedream.core.production_asset_key(
+            normalized_kind, normalized_id, final_path.name
+        ),
+    )
+    source_url = stored["public_url"]
     _write_json_atomic(response_path, seedream.core.without_tos_signatures(response))
     result.update(
         {

@@ -79,9 +79,10 @@ After `## Script`, write consecutive units:
 ## Scene Unit 1 — <dramatic label>
 ```
 
-A Scene Unit maps to one future 4–15 second Generation Segment. Several adjacent
-units may share one `Scene ID`; a new unit does not imply a change of scene, place,
-or time.
+A Scene Unit is a 4–15 second screenplay planning unit. Route A may pack or refine
+it for generation, and its Shot rows do not prescribe the number or formatting of
+future Seedance Prompt passages. Several adjacent units may share one `Scene ID`;
+a new unit does not imply a change of scene, place, or time.
 
 ### Scene Unit Information
 
@@ -119,8 +120,8 @@ One row is one story-facing shot.
 - `Shot ID` uses the globally consecutive Action ID sequence: `A-001`, `A-002`, …
 - `Beat ID` is a globally unique ID such as `BEAT-001A`; it identifies the same
   row's dramatic change.
-- `Duration Seconds` may be an integer or one-decimal positive number.
-- Shot durations in a Scene Unit sum exactly to its declared duration.
+- `Duration Seconds` is a positive editorial estimate. It need not sum exactly to
+  the Scene Unit duration and is not compiled into mandatory Prompt time windows.
 
 #### Scale / View
 
@@ -224,15 +225,14 @@ Every character used by the Scene Unit appears once.
 - `Appearance` is `present_at_open`, `enters`, or `not_visible`.
 - `present_at_open` uses `opening` as Trigger, a concrete opening position, and
   points First Visible and Landing to the first shot where the character is already
-  visibly settled. Its First Visible Moment begins at `t=0.0s`.
+  visibly settled.
 - `enters` names the causal Trigger, physical entry path, First Visible Shot,
   First Visible Moment, Landing Shot, and observable Landing Moment / Result. The
   referenced shot cells must
   actually show the trigger-to-entry-to-landing chain.
-- Time both moment cells from the start of the Scene Unit using
-  `t=<seconds>s: <observable event>`. The time must fall inside the referenced
-  Shot's authored duration; an entrance begins after `t=0.0s`, and landing may not
-  precede first visibility.
+- Both moment cells describe observable events. They may use exact seconds,
+  relative timing, event order, or no numeric timing. Python does not require or
+  interpret a timing notation.
 - O.S./V.O. uses `not_visible` for Trigger, path/position, First Visible, Landing,
   both moment fields, and Landing Result.
 - `Speaks` and `State Change` use `yes` or `no`. `Lines` and `Action Shots` contain

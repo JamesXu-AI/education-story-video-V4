@@ -75,6 +75,42 @@ performance, camera, light, exact speaker/dialogue, language, voice, lip sync, n
 background audio, action completion, internal cuts, safe ending, and the intended
 editorial transition.
 
+## Semantic execution tolerance
+
+Treat authored Shot durations, internal-cut moments, staging marks, and movable-prop
+destinations as precise directing targets, but not as automatic frame-exact rejection
+rules. Return `NO_ISSUES` when an actual execution varies from those targets while
+all of the following remain true:
+
+- Shot order, dramatic causality, speaker ownership, dialogue meaning, and audience
+  attention remain clear;
+- every story-critical action, reaction, line, and consequence completes inside the
+  Segment with a usable ending;
+- identity, costume/injury state, fixed Location anchors, and authorized population
+  remain valid;
+- each movable prop remains one readable object, visibly settles, keeps its ownership
+  and story function, and remains physically available to the next action; and
+- the changed cut or landing does not create a replay, skipped phase, impossible
+  geography, unsafe edit, or contradictory successor state.
+
+For example, a planned five-second internal cut may occur later, and a book planned
+beside a character's knee may settle on the adjacent low table, when the exchange
+still plays completely and the object is stable, singular, owned, and reachable.
+Do not request regeneration merely to force such footage onto an exact timestamp or
+centimetre-level mark.
+
+The tolerance ends where timing or placement carries story meaning. Report an issue
+when drift breaks an explicitly causal entrance/impact/dialogue gate, an authored
+transition or sound synchronization, a fixed-set anchor, ownership, visibility,
+action completion, or the next Segment's reachable start. A missing, duplicated,
+teleported, unstable, or functionally inaccessible prop is not an acceptable landing
+variation.
+
+After an acceptable variation, describe the observed final action phase and actual
+prop position to virtual production in the active task. The successor must be
+recompiled or explicitly revalidated from that observed state instead of pretending
+that the originally planned timestamp or landing occurred.
+
 For a final film, watch the clean and captioned masters from beginning to end and
 check story order, rhythm, transitions, continuity, dialogue, sound, subtitles,
 age/cultural fitness, and technical playback.
@@ -106,6 +142,40 @@ film grammar: eyeline match for an eyeline/reaction cut, action phase for an act
 cut, graphic or semantic correspondence for a match cut, and readable axis/geography
 for a spatial cut. A deliberate axis change is legal when the Storyboard motivates
 and visually establishes it.
+
+## Nonadjacent location-state review
+
+When a location returns after intervening material, compare the return against the
+named location state chain, not merely against the immediately preceding film
+Segment. Inspect both the last approved final state and the latest approved frame
+where persistent anchors are readable. Check fixed furniture, landmarks, fixed
+props, mutable story props, wardrobe, injury, character knowledge/emotion, and
+lighting/time state.
+
+A close source frame may legitimately hide an anchor; it never proves removal.
+Accept a new camera and temporary occlusion when spatial evidence or a later
+re-establishing Shot preserves the anchor. Report an issue when an anchor is absent
+through the return Segment, moves without an authored action, or reappears in an
+impossible world relationship. The correction belongs to cinematography when the
+Storyboard omitted state authority and to virtual production when the Prompt or
+reference binding failed to preserve approved authority.
+
+## Population and offscreen-world review
+
+For every actual Segment, compare each readable wide or widening view with the
+Location master and its declared embedded NPC roster. Confirm that stable NPC
+types/counts/density and fixed dressing persist, while only the Segment-authorized
+independent performers act, speak, enter, exit, or receive directed gaze. Inspect
+the whole clip at normal speed and every external seam for a random new person,
+animal, silhouette, reflection, distant bystander, duplicated performer, missing
+stable NPC, or unexplained crowd-density jump.
+
+The predecessor tail or full video proves recent action state only. A close view is
+not evidence that the offscreen population is empty, and its lack of a wide master
+does not authorize Seedance to repopulate the next Segment. Report missing or wrong
+world evidence to virtual production; report an incorrect embedded/independent role
+classification to production design. Do not accept a structurally valid request
+when direct picture review contradicts the approved population.
 
 Do not report a problem solely because the boundary has low SSIM, a histogram or
 palette jump, different subject scale/position, changed camera angle, changed depth

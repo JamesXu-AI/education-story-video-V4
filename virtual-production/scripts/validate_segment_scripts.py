@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 from pkgutil import extend_path
@@ -24,86 +23,20 @@ import story_video  # noqa: E402
 story_video.__path__ = extend_path(story_video.__path__, story_video.__name__)
 
 from story_video.asset_catalog import load_asset_catalog  # noqa: E402
-from story_video.asset_compatibility import (  # noqa: E402
-    RECEIPT_CONTRACT,
-    validate_compatibility_review,
-)
 from story_video.seed_master_runtime import (  # noqa: E402
     CAPABILITY_PROFILE_RELATIVE,
     EXECUTION_PLAN_DIR_RELATIVE,
     SCRIPT_DIR_RELATIVE,
-    TRACE_RELATIVE,
     SeedMasterRuntimeError,
     build_execution_plan,
     load_execution_plan,
-    manifest_segment_rows,
     parse_segment_script,
     read_json,
-    sha256_file,
+    storyboard_segment_rows,
     token_sort_key,
     validate_source_identity,
 )
 from route_b_handoff import load_route_b_handoff  # noqa: E402
-
-
-def _validate_trace(task_dir: Path) -> None:
-    trace = read_json(task_dir / TRACE_RELATIVE, label="Storyboard-to-Prompt trace")
-    semantic = trace.get("semantic_review")
-    if (
-        trace.get("storyboard_sha256")
-        != sha256_file(task_dir / "previsualize-cinematography/storyboard.md")
-        or trace.get("source_manifest_sha256")
-        != sha256_file(
-            task_dir
-            / "previsualize-cinematography/storyboard-compile-manifest.json"
-        )
-        or not isinstance(semantic, dict)
-        or semantic.get("overall_verdict") != "pass"
-        or semantic.get("omitted_source_items") != []
-        or semantic.get("duplicated_source_items") != []
-        or semantic.get("unapproved_rewrites") != []
-    ):
-        raise SeedMasterRuntimeError("Storyboard-to-Prompt trace is stale or incomplete")
-
-
-def _validate_full_trace_coverage(task_dir: Path) -> None:
-    manifest = read_json(
-        task_dir
-        / "previsualize-cinematography/storyboard-compile-manifest.json",
-        label="Storyboard compile manifest",
-    )
-    trace = read_json(task_dir / TRACE_RELATIVE, label="Storyboard-to-Prompt trace")
-    expected: set[tuple[str, str]] = set()
-    for key, source_type, id_field in (
-        ("segments", "segment", "segment_id"),
-        ("boundaries", "boundary", "boundary_id"),
-        ("shots", "shot", "shot_id"),
-        ("lines", "line", "line_id"),
-        ("beats", "beat", "beat_id"),
-        ("requirements", "requirement", "requirement_id"),
-    ):
-        rows = manifest.get(key)
-        if not isinstance(rows, list):
-            raise SeedMasterRuntimeError(f"Storyboard compile manifest lacks {key}")
-        for row in rows:
-            source_id = row.get(id_field) if isinstance(row, dict) else None
-            if not isinstance(source_id, str) or not source_id:
-                raise SeedMasterRuntimeError(
-                    f"Storyboard compile manifest has an invalid {source_type} ID"
-                )
-            expected.add((source_type, source_id))
-    mappings = trace.get("mappings")
-    if not isinstance(mappings, list):
-        raise SeedMasterRuntimeError("Storyboard-to-Prompt trace has no mappings")
-    actual = [
-        (row.get("source_type"), row.get("source_id"))
-        for row in mappings
-        if isinstance(row, dict)
-    ]
-    if len(actual) != len(set(actual)) or set(actual) != expected:
-        raise SeedMasterRuntimeError(
-            "Storyboard-to-Prompt trace coverage is omitted, duplicated, or extraneous"
-        )
 
 
 def _validate_execution_plan(
@@ -112,10 +45,9 @@ def _validate_execution_plan(
     segment_id = parsed["segment_id"]
     if (
         plan.get("source_script_sha256") != parsed["script_sha256"]
+        or plan.get("source_private_plan_sha256") != parsed["private_plan_sha256"]
         or plan.get("source_storyboard_sha256")
         != parsed["metadata"]["source_storyboard_sha256"]
-        or plan.get("source_manifest_sha256")
-        != parsed["metadata"]["source_manifest_sha256"]
     ):
         raise SeedMasterRuntimeError(f"{segment_id} execution plan is stale")
     shooting = plan.get("shooting_plan")
@@ -187,34 +119,21 @@ def _validate_execution_plan(
             raise SeedMasterRuntimeError(
                 f"{segment_id} is not locked to the current predecessor attempt"
             )
-    compatibility = plan.get("asset_compatibility")
-    if (
-        not isinstance(compatibility, dict)
-        or compatibility.get("contract")
-        != RECEIPT_CONTRACT
-        or compatibility.get("overall_verdict") != "PASS"
-        or compatibility.get("final_prompt_sha256")
-        != hashlib.sha256(parsed["prompt"].encode("utf-8")).hexdigest()
-    ):
-        raise SeedMasterRuntimeError(
-            f"{segment_id} lacks a current final-Prompt/assets.json semantic compatibility PASS"
-        )
 
 
 def validate_task(
     task_dir: Path, *, segment_ids: list[str] | None = None
 ) -> dict[str, Any]:
     task_dir = task_dir.expanduser().resolve(strict=True)
-    _validate_trace(task_dir)
-    manifest_rows = manifest_segment_rows(task_dir)
-    all_ids = [str(item["segment_id"]) for item in manifest_rows]
+    plan_rows = storyboard_segment_rows(task_dir)
+    all_ids = [str(item["segment_id"]) for item in plan_rows]
     if segment_ids is None:
         selected = all_ids
     else:
         if not segment_ids or len(segment_ids) != len(set(segment_ids)):
             raise SeedMasterRuntimeError("Selected Segment IDs must be unique")
         if any(item not in all_ids for item in segment_ids):
-            raise SeedMasterRuntimeError("Selected Segment IDs are not in the Storyboard manifest")
+            raise SeedMasterRuntimeError("Selected Segment IDs are not in the private Storyboard-derived plans")
         selected = segment_ids
     script_root = task_dir / SCRIPT_DIR_RELATIVE
     plan_root = task_dir / EXECUTION_PLAN_DIR_RELATIVE
@@ -229,7 +148,7 @@ def validate_task(
         actual_plans = sorted(path.stem for path in plan_root.glob("segment-*.json"))
         if actual_scripts != all_ids or actual_plans != all_ids:
             raise SeedMasterRuntimeError(
-                "Complete Route B Script/execution-plan coverage differs from the Storyboard manifest"
+                "Complete Prompt/execution-plan coverage differs from the private Segment plans"
             )
     total_duration = 0
     parsed_by_id: dict[str, dict[str, Any]] = {}
@@ -245,12 +164,6 @@ def validate_task(
             capability_profile=capability_profile,
             task=task,
         )
-        expected_plan["asset_compatibility"] = validate_compatibility_review(
-            task_dir=task_dir,
-            parsed=parsed,
-            provisional_plan=expected_plan,
-            catalog=catalog,
-        )
         if plan != expected_plan:
             raise SeedMasterRuntimeError(
                 f"{segment_id} execution plan does not contain current asset/provider values"
@@ -260,7 +173,6 @@ def validate_task(
     if segment_ids is None and total_duration > 240:
         raise SeedMasterRuntimeError("Complete Seedance source-video duration exceeds 240s")
     if segment_ids is None:
-        _validate_full_trace_coverage(task_dir)
         wave_by_id: dict[str, int] = {}
         for index, segment_id in enumerate(all_ids):
             metadata = parsed_by_id[segment_id]["metadata"]
@@ -286,7 +198,7 @@ def validate_task(
         handoff = load_route_b_handoff(task_dir)
         if list(handoff) != all_ids:
             raise SeedMasterRuntimeError(
-                "Route B dialogue/boundary handoff differs from the Storyboard manifest"
+                "Route B dialogue/boundary handoff differs from the private Segment plans"
             )
     return {
         "status": "PASS",
